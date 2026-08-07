@@ -3,49 +3,41 @@ require("dotenv").config();
 const {
   Client,
   GatewayIntentBits,
-  Events,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  Events
 } = require("discord.js");
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-  ],
+  intents: [GatewayIntentBits.Guilds]
 });
 
-client.once(Events.ClientReady, (client) => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  console.log("🚀 Prophixy Bot is online!");
+client.once(Events.ClientReady, () => {
+  console.log("✅ Ready:", client.user.tag);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+
+  console.log("===== INTERACTION =====");
+  console.log("Type:", interaction.type);
+
+  if (!interaction.isChatInputCommand()) return;
+
+  console.log("Command:", interaction.commandName);
+  console.log("Interaction timestamp:", interaction.createdTimestamp);
+  console.log("Current timestamp:", Date.now());
+  console.log("Difference (ms):", Date.now() - interaction.createdTimestamp);
+
   try {
-    if (!interaction.isChatInputCommand()) return;
+    await interaction.reply({
+      content: "✅ Test reply successful!"
+    });
 
-    console.log("Command received:", interaction.commandName);
+    console.log("Reply succeeded.");
 
-    if (interaction.commandName === "connectwallet") {
-      const button = new ButtonBuilder()
-        .setLabel("🔗 Connect Wallet")
-        .setStyle(ButtonStyle.Link)
-        .setURL("https://example.com");
-
-      const row = new ActionRowBuilder().addComponents(button);
-
-      await interaction.deferReply({ ephemeral: true });
-
-      await interaction.editReply({
-        content: "Wallet connection is coming soon.",
-        components: [row],
-      });
-    }
   } catch (err) {
-    console.error("Interaction Error:");
+    console.error("Reply failed:");
     console.error(err);
   }
+
 });
 
 client.login(process.env.DISCORD_TOKEN);
