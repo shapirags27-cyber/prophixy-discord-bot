@@ -9,6 +9,7 @@ const {
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
+require("./api")(client);
 
 client.once(Events.ClientReady, () => {
   console.log("✅ Ready:", client.user.tag);
