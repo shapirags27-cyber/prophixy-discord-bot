@@ -70,6 +70,19 @@ async function initDB() {
       user.bestStreak = 0;
     }
 
+    // Daily check-in system
+    if (user.dailyCheckIns === undefined) {
+      user.dailyCheckIns = 0;
+    }
+
+    if (user.lastDailyCheckIn === undefined) {
+      user.lastDailyCheckIn = null;
+    }
+
+    if (user.dailyCheckInRewarded === undefined) {
+      user.dailyCheckInRewarded = false;
+    }
+
     if (!user.sbt) {
       user.sbt = {
         verified: false,
@@ -141,6 +154,11 @@ async function createUser(discordId, username) {
 
     streak: 0,
     bestStreak: 0,
+
+    // Daily check-in system
+    dailyCheckIns: 0,
+    lastDailyCheckIn: null,
+    dailyCheckInRewarded: false,
 
     sbt: {
       verified: false,

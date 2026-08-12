@@ -39,6 +39,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -1399,4 +1401,163 @@ async function handleCloseTicket(interaction) {
     }
   }
 }
+
+// =====================================================
+// =====================================================
+// DAILY CHECK-IN SYSTEM
+// =====================================================
+
+client.on(Events.MessageCreate, async (message) => {
+
+  try {
+
+    // Ignore bots
+    if (message.author.bot) {
+      return;
+    }
+
+    // Only the configured Daily Check-In channel
+    const checkInChannelId =
+      process.env.DAILY_CHECKIN_CHANNEL_ID;
+
+    if (!checkInChannelId) {
+      console.error(
+        "❌ DAILY_CHECKIN_CHANNEL_ID is not configured."
+      );
+      return;
+    }
+
+    if (message.channel.id !== checkInChannelId) {
+      return;
+    }
+
+    // Only accept gprophixy / Gprophixy
+    if (message.content.trim().toLowerCase() !== "gprophixy") {
+      return;
+    }
+
+    const userId = message.author.id;
+
+    let user = await getUser(userId);
+
+    if (!user) {
+      user = await createUser(
+        userId,
+        message.author.username
+      );
+    }
+
+    const now = Date.now();
+
+    const lastCheckIn = user.lastDailyCheckIn
+      ? new Date(user.lastDailyCheckIn).getTime()
+      : 0;
+
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    // =====================================================
+    // 24-HOUR CHECK
+    // =====================================================
+
+    if (
+      lastCheckIn &&
+      now - lastCheckIn < twentyFourHours
+    ) {
+
+      const remaining =
+        twentyFourHours - (now - lastCheckIn);
+
+      const hours =
+        Math.floor(
+          remaining / (60 * 60 * 1000)
+        );
+
+      const minutes =
+        Math.floor(
+          (remaining % (60 * 60 * 1000)) /
+          (60 * 1000)
+        );
+
+      await message.reply(
+        `⏳ You already checked in today.\n\n` +
+        `Next check-in available in **${hours}h ${minutes}m**.\n` +
+        `🔥 Progress: **${user.dailyCheckIns || 0}/7**`
+      );
+
+      return;
+    }
+
+    // =====================================================
+    // QUALIFYING CHECK-IN
+    // =====================================================
+
+    user.dailyCheckIns =
+      Number(user.dailyCheckIns || 0) + 1;
+
+    user.lastDailyCheckIn =
+      new Date(now).toISOString();
+
+    // =====================================================
+    // ADD CUSTOM PHX CHECK-IN EMOJI
+    // =====================================================
+
+    try {
+      await message.react("<:phxcheck:1523759271785795756>");
+    } catch (emojiError) {
+      console.error(
+        "❌ Could not add PHX check-in emoji:",
+        emojiError.message
+      );
+    }
+
+    let rewardMessage = "";
+
+    // =====================================================
+    // 7 CHECK-INS = 5 PHX
+    // =====================================================
+
+    if (user.dailyCheckIns >= 7) {
+
+      user.phx =
+        Number(user.phx || 0) + 5;
+
+      // Start a new 7-day reward cycle
+      user.dailyCheckIns = 0;
+
+      user.dailyCheckInRewarded = true;
+
+      rewardMessage =
+        `\n\n🎁 **7-day check-in reward unlocked!**\n` +
+        `💰 **+5 PHX**\n` +
+        `🔥 New check-in cycle started: **0/7**`;
+
+    } else {
+
+      user.dailyCheckInRewarded = false;
+    }
+
+    await save();
+
+    // =====================================================
+    // SUCCESS MESSAGE
+    // =====================================================
+
+    await message.reply(
+      `✅ **Daily check-in confirmed!**\n\n` +
+      `👤 ${message.author}\n` +
+      `🔥 Check-in progress: **${user.dailyCheckIns}/7**` +
+      rewardMessage
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Daily check-in error:",
+      error
+    );
+
+  }
+
+});
+
 client.login(process.env.DISCORD_TOKEN);
