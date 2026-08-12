@@ -775,7 +775,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
               .setStyle(ButtonStyle.Success),
 
             new ButtonBuilder()
-              .setCustomId("connect_verify_wallet")
               .setLabel("Verify Wallet")
               .setEmoji("🔐")
               .setStyle(ButtonStyle.Link)
