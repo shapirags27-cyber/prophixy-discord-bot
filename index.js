@@ -590,7 +590,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (!interaction.isChatInputCommand()) return;
 
     console.log("Command received:", interaction.commandName);
 
