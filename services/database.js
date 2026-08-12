@@ -86,8 +86,21 @@ async function initDB() {
     if (!user.sbt) {
       user.sbt = {
         verified: false,
-        role: "none"
+        role: "none",
+        rewardClaimed: false
       };
+    } else {
+      if (user.sbt.verified === undefined) {
+        user.sbt.verified = false;
+      }
+
+      if (user.sbt.role === undefined) {
+        user.sbt.role = "none";
+      }
+
+      if (user.sbt.rewardClaimed === undefined) {
+        user.sbt.rewardClaimed = false;
+      }
     }
 
   }
