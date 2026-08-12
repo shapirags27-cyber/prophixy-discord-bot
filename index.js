@@ -28,7 +28,12 @@ const { verifySBT } = require("./services/sbt");
 const { assignSbtRole } = require("./services/roles");
 
 const { createEvent } = require("./events/createEvent");
-const { handleVote } = require("./interactions/vote");
+const { handleVote, handleStakeSubmit } = require("./interactions/vote");
+const { resolveMarket } = require("./commands/resolve");
+const {
+  getLeaderboard,
+  getUserRank
+} = require("./services/leaderboard");
 
 const client = new Client({
   intents: [
@@ -447,6 +452,50 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // =====================================================
+    // PHX STAKE MODAL
+    // =====================================================
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId.startsWith("stake_")
+    ) {
+
+      try {
+
+        await handleStakeSubmit(interaction);
+
+      } catch (error) {
+
+        console.error(
+          "❌ PHX stake submission error:",
+          error
+        );
+
+        if (
+          interaction.deferred ||
+          interaction.replied
+        ) {
+
+          await interaction.editReply({
+            content:
+              `❌ Unable to submit prediction.\n\nReason: ${error.message}`
+          }).catch(() => {});
+
+        } else {
+
+          await interaction.reply({
+            content:
+              `❌ Unable to submit prediction.\n\nReason: ${error.message}`,
+            ephemeral: true
+          }).catch(() => {});
+
+        }
+
+      }
+
+      return;
+    }
+
+    // =====================================================
     // WALLET VERIFICATION MODAL
     // =====================================================
     if (
@@ -546,242 +595,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.log("Command received:", interaction.commandName);
 
     // =====================================================
-    // TICKET PANEL
+        // =====================================================
+        // =====================================================
+    // ADMIN COMMUNITY PANEL
     // =====================================================
-    if (interaction.commandName === "ticket-panel") {
+    if (interaction.commandName === "panel") {
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Prophixy Support")
-        .setDescription(
-          "Need help with Prophixy?\n\n" +
-          "You can open a private ticket to talk directly with the Prophixy team or moderators.\n\n" +
-          "You can use a ticket for:\n" +
-          "• Account issues\n" +
-          "• Prediction issues\n" +
-          "• Rewards and points\n" +
-          "• Wallet issues\n" +
-          "• Market issues\n" +
-          "• Reports or other private matters\n\n" +
-          "🔒 Your ticket will only be visible to you and Prophixy staff."
+      if (
+        !interaction.member ||
+        !interaction.member.permissions.has(
+          PermissionFlagsBits.Administrator
         )
-        .setFooter({
-          text: "Prophixy • Shape Africa’s Future"
+      ) {
+        return interaction.reply({
+          content:
+            "❌ You don't have permission to use the Prophixy panel command.",
+          flags: MessageFlags.Ephemeral
         });
+      }
 
-      const button = new ButtonBuilder()
-        .setCustomId("open_prophixy_ticket")
-        .setLabel("Open Ticket")
-        .setEmoji("🎫")
-        .setStyle(ButtonStyle.Primary);
-
-      const row = new ActionRowBuilder()
-        .addComponents(button);
-
-      await interaction.channel.send({
-        embeds: [embed],
-        components: [row]
-      });
-
-      await interaction.reply({
-        content: "✅ Support ticket panel posted.",
+      await interaction.deferReply({
         flags: MessageFlags.Ephemeral
       });
 
-      return;
-    }
-
-
-    // =====================================================
-    // CONNECT WALLET
-    // =====================================================
-   if (interaction.isChatInputCommand() && interaction.commandName === "wallet-panel") {
-
-  console.log(
-    "🔐 wallet-panel received:",
-    interaction.id,
-    "delay:",
-    `${Date.now() - interaction.createdTimestamp}ms`
-  );
-
-  // ACK immediately — nothing should happen before this.
-  try {
-    await interaction.reply({
-      content: "⏳ Creating the wallet verification panel...",
-      flags: MessageFlags.Ephemeral
-    });
-  } catch (error) {
-    console.error(
-      "❌ wallet-panel could not acknowledge interaction:",
-      error
-    );
-    return;
-  }
-
-  try {
-
-    const guild = interaction.guild;
-
-    if (!guild) {
-      await interaction.editReply({
-        content:
-          "❌ This command can only be used inside the Prophixy server."
-      });
-      return;
-    }
-
-    console.log(
-      `🔐 Preparing wallet panel in guild ${guild.id}`
-    );
-
-    // Find existing verification channel.
-    let walletChannel = guild.channels.cache.find(
-      channel =>
-        channel.type === ChannelType.GuildText &&
-        channel.name === "🔐・wallet-verification"
-    );
-
-    // Create it if it doesn't exist.
-    if (!walletChannel) {
-
-      console.log(
-        "🔐 Creating wallet verification channel..."
-      );
-
-      walletChannel = await guild.channels.create({
-        name: "🔐・wallet-verification",
-        type: ChannelType.GuildText
-      });
-
-      console.log(
-        `✅ Created #${walletChannel.name}`
-      );
-
-    } else {
-
-      console.log(
-        `ℹ️ Using existing #${walletChannel.name}`
-      );
-    }
-
-    const embed = new EmbedBuilder()
-      .setTitle("🔐 Prophixy Wallet Verification")
-      .setDescription(
-        "Connect your wallet to verify your Prophixy SBT.\n\n" +
-        "Prophixy will check the blockchain and verify whether your wallet holds a valid Prophixy SBT.\n\n" +
-        "**What happens after verification?**\n" +
-        "🔗 Connect your Discord account\n" +
-        "🦊 Connect MetaMask\n" +
-        "🔎 Verify your SBT\n" +
-        "🎖️ Receive your verified Prophixy role\n\n" +
-        "**Available SBT roles**\n" +
-        "🏆 Top Forecaster\n" +
-        "📊 Market Creator"
-      )
-      .setFooter({
-        text: "Prophixy • Shape Africa’s Future"
-      })
-      .setTimestamp();
-
-    const button = new ButtonBuilder()
-      .setLabel("Connect & Verify Wallet")
-      .setEmoji("🦊")
-      .setStyle(ButtonStyle.Link)
-      .setURL("https://prophixy-verify.onrender.com");
-
-    const row = new ActionRowBuilder()
-      .addComponents(button);
-
-    await walletChannel.send({
-      embeds: [embed],
-      components: [row]
-    });
-
-    console.log(
-      `✅ Wallet verification panel posted in #${walletChannel.name}`
-    );
-
-    await interaction.editReply({
-      content:
-        `✅ Wallet verification panel posted in ${walletChannel}`
-    });
-
-  } catch (error) {
-
-    console.error(
-      "❌ Wallet panel creation error:",
-      error
-    );
-
-    await interaction.editReply({
-      content:
-        "❌ Could not create the wallet verification panel."
-    }).catch(() => {});
-  }
-
-  return;
-}
-
-    // =====================================================
-    // PROFILE
-    // =====================================================
-    if (interaction.commandName === "profile") {
-
-      let user = await getUser(interaction.user.id);
-
-      if (!user) {
-        user = await createUser(
-          interaction.user.id,
-          interaction.user.username
-        );
-      }
-
-      await interaction.reply({
-
-        content:
-
-`# 👤 ${interaction.user.username}
-
-💰 PHX: ${user.phx}
-
-🏆 Wins: ${user.wins}
-
-❌ Losses: ${user.losses}
-
-📊 Predictions: ${user.totalPredictions}
-
-🎯 Accuracy: ${user.accuracy}%
-
-🔥 Streak: ${user.streak}
-
-👥 Invites: ${user.invites}
-
-👛 Wallet:
-${user.wallet || "Not Connected"}
-
-🎖 SBT:
-${user.sbt.role}`
-
-      });
-
-      return;
-    }
-
-    // =====================================================
-    // WALLET VERIFICATION PANEL
-    // =====================================================
-    if (interaction.commandName === "wallet-panel") {
-
       try {
-
-        // Acknowledge Discord immediately.
-        await interaction.deferReply({
-          flags: MessageFlags.Ephemeral
-        });
-
-        console.log(
-          "✅ Wallet panel interaction acknowledged immediately."
-        );
-
         const guild = interaction.guild;
 
         if (!guild) {
@@ -791,97 +628,416 @@ ${user.sbt.role}`
           });
         }
 
-        // Check if the wallet verification channel already exists.
-        let walletChannel = guild.channels.cache.find(
+        // =====================================================
+        // PROFILE CHANNEL
+        // =====================================================
+
+        let profileChannel = guild.channels.cache.find(
           channel =>
             channel.type === ChannelType.GuildText &&
-            channel.name === "🔐・wallet-verification"
+            channel.name === "👤・profile"
         );
 
-        if (!walletChannel) {
-
-          console.log(
-            "🔐 Creating wallet verification channel..."
-          );
-
-          walletChannel = await guild.channels.create({
-            name: "🔐・wallet-verification",
+        if (!profileChannel) {
+          profileChannel = await guild.channels.create({
+            name: "👤・profile",
             type: ChannelType.GuildText
           });
 
           console.log(
-            `✅ Wallet verification channel created: #${walletChannel.name}`
+            `✅ Created #${profileChannel.name}`
           );
-
-        } else {
-
-          console.log(
-            `ℹ️ Wallet verification channel already exists: #${walletChannel.name}`
-          );
-
         }
 
-        const embed = new EmbedBuilder()
-          .setTitle("🔐 Prophixy Wallet Verification")
+        const profileEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("👤 Prophixy Profile")
           .setDescription(
-            "Connect your wallet to verify your Prophixy SBT.\n\n" +
-            "After connecting your wallet, Prophixy will check the blockchain " +
-            "and verify whether your wallet holds a valid Prophixy SBT.\n\n" +
-            "**What happens after verification?**\n" +
-            "🔗 Connect your wallet\n" +
-            "🔎 Verify your SBT\n" +
-            "🎖️ Receive your verified Prophixy role\n\n" +
-            "**Available SBT roles**\n" +
-            "🏆 Top Forecaster\n" +
-            "📊 Market Creator"
+            "View your Prophixy account information.\n\n" +
+            "Your profile shows:\n" +
+            "💰 PHX balance\n" +
+            "🏆 Wins\n" +
+            "❌ Losses\n" +
+            "📊 Predictions\n" +
+            "🎯 Accuracy\n" +
+            "🔥 Streak\n" +
+            "👥 Invites\n" +
+            "👛 Connected wallet\n" +
+            "🎖️ SBT role\n\n" +
+            "Click the button below to view your profile."
           )
           .setFooter({
-            text: "Prophixy • Shape Africa’s Future"
+            text: "Prophixy • Shape Africa's Future"
+          });
+
+        const profileButton = new ButtonBuilder()
+          .setCustomId("prophixy_profile")
+          .setLabel("View My Profile")
+          .setEmoji("👤")
+          .setStyle(ButtonStyle.Primary);
+
+        const profileRow = new ActionRowBuilder()
+          .addComponents(profileButton);
+
+        await profileChannel.send({
+          embeds: [profileEmbed],
+          components: [profileRow]
+        });
+
+        // =====================================================
+        // PHX LEADERBOARD CHANNEL
+        // =====================================================
+
+        let leaderboardChannel = guild.channels.cache.find(
+          channel =>
+            channel.type === ChannelType.GuildText &&
+            channel.name === "🏆・phx-leaderboard"
+        );
+
+        if (!leaderboardChannel) {
+          leaderboardChannel = await guild.channels.create({
+            name: "🏆・phx-leaderboard",
+            type: ChannelType.GuildText
+          });
+
+          console.log(
+            `✅ Created #${leaderboardChannel.name}`
+          );
+        }
+
+        const leaderboardEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("🏆 Prophixy PHX Leaderboard")
+          .setDescription(
+            "See the top PHX holders in the Prophixy community.\n\n" +
+            "Click the button below to view the current leaderboard."
+          )
+          .setFooter({
+            text: "Prophixy • Shape Africa's Future"
+          });
+
+        const leaderboardButton = new ButtonBuilder()
+          .setCustomId("prophixy_leaderboard")
+          .setLabel("View PHX Leaderboard")
+          .setEmoji("🏆")
+          .setStyle(ButtonStyle.Primary);
+
+        const leaderboardRow = new ActionRowBuilder()
+          .addComponents(leaderboardButton);
+
+        await leaderboardChannel.send({
+          embeds: [leaderboardEmbed],
+          components: [leaderboardRow]
+        });
+
+        // =====================================================
+        // COMMUNITY PANEL
+        // =====================================================
+
+        const embed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("🔮 Prophixy Community")
+          .setDescription(
+            "Predict Smarter. Decide Better. Shape Africa's Future.\n\n" +
+            "Use the buttons below to access Prophixy features.\n\n" +
+            "👤 **Profile** — View your Prophixy account\n" +
+            "🏆 **PHX Leaderboard** — See the top PHX holders\n" +
+            "🎁 **Generate Invite** — Create your personal invite\n" +
+            "🔐 **Verify Wallet** — Verify your Prophixy SBT\n" +
+            "🎫 **Support** — Open a private support ticket"
+          )
+          .setFooter({
+            text: "Prophixy • Shape Africa's Future"
           })
           .setTimestamp();
 
-        const button = new ButtonBuilder()
-          .setLabel("Connect & Verify Wallet")
-          .setEmoji("🔗")
-          .setStyle(ButtonStyle.Link)
-          .setURL("https://prophixy-verify.onrender.com");
+        const row1 = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("prophixy_profile")
+              .setLabel("Profile")
+              .setEmoji("👤")
+              .setStyle(ButtonStyle.Primary),
 
-        const row = new ActionRowBuilder()
-          .addComponents(button);
+            new ButtonBuilder()
+              .setCustomId("prophixy_leaderboard")
+              .setLabel("PHX Leaderboard")
+              .setEmoji("🏆")
+              .setStyle(ButtonStyle.Primary)
+          );
 
-        await walletChannel.send({
+        const row2 = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("generate_prophixy_invite")
+              .setLabel("Generate Invite")
+              .setEmoji("🎁")
+              .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
+              .setCustomId("connect_verify_wallet")
+              .setLabel("Verify Wallet")
+              .setEmoji("🔐")
+              .setStyle(ButtonStyle.Link)
+              .setURL("https://prophixy-verify.onrender.com"),
+
+            new ButtonBuilder()
+              .setCustomId("open_prophixy_ticket")
+              .setLabel("Support")
+              .setEmoji("🎫")
+              .setStyle(ButtonStyle.Primary)
+          );
+
+        await interaction.channel.send({
           embeds: [embed],
-          components: [row]
+          components: [row1, row2]
         });
-
-        console.log(
-          `✅ Wallet verification panel posted in #${walletChannel.name}`
-        );
 
         await interaction.editReply({
           content:
-            `✅ Wallet verification panel posted in ${walletChannel}`
+            `✅ Prophixy panels created.\n\n` +
+            `👤 Profile: ${profileChannel}\n` +
+            `🏆 Leaderboard: ${leaderboardChannel}\n` +
+            `🔮 Community panel: ${interaction.channel}`
         });
 
       } catch (error) {
 
         console.error(
-          "❌ Wallet panel creation error:",
+          "❌ Community panel creation error:",
           error
         );
 
-        if (interaction.deferred || interaction.replied) {
-
-          await interaction.editReply({
-            content:
-              "❌ Could not create the wallet verification panel."
-          }).catch(() => {});
-
-        }
-
+        await interaction.editReply({
+          content:
+            "❌ Could not create the Prophixy panels."
+        }).catch(() => {});
       }
 
       return;
+    }
+
+    // =====================================================
+    // PROFILE BUTTON
+    // =====================================================
+
+    // =====================================================
+
+    // =====================================================
+    if (
+      interaction.isButton() &&
+      interaction.customId === "prophixy_profile"
+    ) {
+
+      try {
+
+        let user = await getUser(interaction.user.id);
+
+        if (!user) {
+          user = await createUser(
+            interaction.user.id,
+            interaction.user.username
+          );
+        }
+
+        await interaction.reply({
+          content:
+`# 👤 ${interaction.user.username}
+
+💰 PHX: ${Number(user.phx || 0).toLocaleString()}
+
+🏆 Wins: ${user.wins || 0}
+
+❌ Losses: ${user.losses || 0}
+
+📊 Predictions: ${user.totalPredictions || 0}
+
+🎯 Accuracy: ${user.accuracy || 0}%
+
+🔥 Streak: ${user.streak || 0}
+
+👥 Invites: ${user.invites || 0}
+
+👛 Wallet:
+${user.wallet || "Not Connected"}
+
+🎖 SBT:
+${user.sbt?.role || "Not Verified"}`
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ Profile button error:",
+          error
+        );
+
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content:
+              "❌ Unable to load your profile."
+          }).catch(() => {});
+        }
+      }
+
+      return;
+    }
+
+      // =====================================================
+      // PHX LEADERBOARD PANEL
+      // =====================================================
+      if (
+        interaction.isButton() &&
+        interaction.customId === "prophixy_leaderboard"
+      ) {
+
+        try {
+
+          await interaction.deferReply({
+            flags: MessageFlags.Ephemeral
+          });
+
+          const users = await getLeaderboard(10);
+
+          if (!users.length) {
+            return interaction.editReply({
+              content:
+                "📊 The PHX leaderboard is currently empty."
+            });
+          }
+
+          const medals = ["🥇", "🥈", "🥉"];
+
+          const lines = users.map((user, index) => {
+
+            const position =
+              medals[index] || `**${index + 1}.**`;
+
+            return (
+              `${position} <@${user.discordId}> — ` +
+              `**${Number(user.phx || 0).toLocaleString()} PHX**`
+            );
+          });
+
+          const rank =
+            await getUserRank(interaction.user.id);
+
+          const leaderboardEmbed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle("🏆 Prophixy PHX Leaderboard")
+            .setDescription(
+              lines.join("\n")
+            )
+            .setFooter({
+              text: rank
+                ? `Your rank: #${rank.rank} • ${Number(rank.phx || 0).toLocaleString()} PHX`
+                : "Your account is not yet ranked"
+            })
+            .setTimestamp();
+
+          await interaction.editReply({
+            embeds: [leaderboardEmbed]
+          });
+
+        } catch (error) {
+
+          console.error(
+            "❌ PHX leaderboard panel error:",
+            error
+          );
+
+          if (
+            interaction.deferred ||
+            interaction.replied
+          ) {
+            await interaction.editReply({
+              content:
+                "❌ Unable to load the PHX leaderboard."
+            }).catch(() => {});
+          } else {
+            await interaction.reply({
+              content:
+                "❌ Unable to load the PHX leaderboard.",
+              flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+          }
+        }
+
+        return;
+      }
+// =====================================================
+    // RESOLVE MARKET
+    // =====================================================
+    if (interaction.commandName === "resolve") {
+
+      const marketId =
+        interaction.options.getString("marketid");
+
+      const winnerNumber =
+        interaction.options.getInteger("winner");
+
+      // Discord uses 1-5 for the winning option.
+      // Internally Prophixy stores options as 0-4.
+      const winnerOption = winnerNumber - 1;
+
+      if (
+        winnerNumber < 1 ||
+        winnerNumber > 5
+      ) {
+        return interaction.reply({
+          content:
+            "❌ Winner must be between **1 and 5**.",
+          ephemeral: true
+        });
+      }
+
+      await interaction.deferReply({
+        ephemeral: true
+      });
+
+      try {
+
+        const result =
+          await resolveMarket(
+            marketId,
+            winnerOption
+          );
+
+        if (!result.success) {
+
+          return interaction.editReply({
+            content:
+              `❌ ${result.message}`
+          });
+
+        }
+
+        return interaction.editReply({
+          content:
+            `✅ **Market resolved successfully!**\\n\\n` +
+            `🆔 Market: **${marketId}**\\n` +
+            `🏆 Winning option: **${winnerNumber}**\\n\\n` +
+            `🏦 Total pool: **${Number(result.totalPool || 0).toLocaleString()} PHX**\\n` +
+            `👤 Creator reward (3%): **${Number(result.creatorReward || 0).toLocaleString()} PHX**\\n` +
+            `🏆 Winner pool (93%): **${Number(result.winnerPool || 0).toLocaleString()} PHX**\\n` +
+            `🏦 Reserve (4%): **${Number(result.reserveAmount || 0).toLocaleString()} PHX**\\n\\n` +
+            `👥 Winners: **${result.winners}**\\n` +
+            `💰 Distributed to winners: **${Number(result.distributedToWinners || 0).toLocaleString()} PHX**`
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ Market resolution error:",
+          error
+        );
+
+        return interaction.editReply({
+          content:
+            `❌ Unable to resolve market.\\n\\nReason: ${error.message}`
+        });
+
+      }
     }
 
     // =====================================================
@@ -909,8 +1065,6 @@ ${user.sbt.role}`
 
       ].filter(Boolean);
 
-      const rewardPool =
-        interaction.options.getInteger("reward");
 
       const duration =
 interaction.options.getString("duration");
@@ -953,18 +1107,12 @@ switch (unit) {
 }
 
       const event = await createEvent(
-
-        category,
-
-        question,
-
-        options,
-
-        rewardPool,
-
-        Date.now() + milliseconds
-
-      );
+  category,
+  question,
+  options,
+  Date.now() + milliseconds,
+  interaction.user.id
+);
 
 const embed = new EmbedBuilder()
   .setColor(0x0099FF)
@@ -982,8 +1130,8 @@ const embed = new EmbedBuilder()
     },
 
     {
-      name: "🏆 Reward Pool",
-      value: `${rewardPool} PHX`,
+      name: "🏦 Market Pool",
+      value: "0 PHX",
       inline: true
     },
 
@@ -1176,7 +1324,7 @@ Your unique invite is ready:
 
 ⏳ **Expires:** 7 days from now
 
-👥 **Reward:** +10 points for each successful invite
+👥 **Reward:** +10 PHX for each successful invite
 
 🎁 Share this link with your friends!
 

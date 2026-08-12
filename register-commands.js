@@ -9,18 +9,31 @@ const {
 const commands = [
 
   // ===========================
-  // CONNECT WALLET
+  // ADMIN COMMUNITY PANEL
   // ===========================
   new SlashCommandBuilder()
-    .setName("connectwallet")
-    .setDescription("Connect your wallet"),
+    .setName("panel")
+    .setDescription("Post the Prophixy community panel"),
+  // ===========================
+  // CONNECT WALLET
+  // ===========================
 
   // ===========================
   // PROFILE
   // ===========================
-  new SlashCommandBuilder()
-    .setName("profile")
-    .setDescription("View your Prophixy profile"),
+
+  // ===========================
+  // LEADERBOARD
+  // ===========================
+
+  // ===========================
+  // INVITE PANEL
+  // ===========================
+  
+
+  // ===========================
+  // INVITE
+  // ===========================
 
   // ===========================
   // CREATE MARKET
@@ -28,7 +41,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("event-create")
     .setDescription("Create a prediction market")
-
     .addStringOption(option =>
       option
         .setName("category")
@@ -43,56 +55,42 @@ const commands = [
           { name: "Community", value: "community" }
         )
     )
-
     .addStringOption(option =>
       option
         .setName("question")
         .setDescription("Prediction question")
         .setRequired(true)
     )
-
     .addStringOption(option =>
       option
         .setName("option1")
         .setDescription("First option")
         .setRequired(true)
     )
-
     .addStringOption(option =>
       option
         .setName("option2")
         .setDescription("Second option")
         .setRequired(true)
     )
-
-    .addIntegerOption(option =>
-      option
-        .setName("reward")
-        .setDescription("Total PHX reward pool")
-        .setRequired(true)
-    )
-
     .addStringOption(option =>
       option
         .setName("duration")
         .setDescription("Examples: 30m, 2h, 3d, 1w")
         .setRequired(true)
     )
-
     .addStringOption(option =>
       option
         .setName("option3")
         .setDescription("Third option (optional)")
         .setRequired(false)
     )
-
     .addStringOption(option =>
       option
         .setName("option4")
         .setDescription("Fourth option (optional)")
         .setRequired(false)
     )
-
     .addStringOption(option =>
       option
         .setName("option5")
@@ -106,20 +104,26 @@ const commands = [
   new SlashCommandBuilder()
     .setName("resolve")
     .setDescription("Resolve a prediction market")
-
     .addStringOption(option =>
       option
         .setName("marketid")
         .setDescription("Market ID")
         .setRequired(true)
     )
-
     .addIntegerOption(option =>
       option
         .setName("winner")
         .setDescription("Winning option number (1-5)")
         .setRequired(true)
-    )
+    ),
+
+  // ===========================
+  // TICKET PANEL
+  // =========================== 
+
+  // ===========================
+  // WALLET VERIFICATION PANEL
+  // ===========================
 
 ].map(command => command.toJSON());
 
@@ -141,8 +145,14 @@ const rest = new REST({ version: "10" })
 
     console.log("✅ Slash commands registered successfully!");
 
+    console.log(
+      "Registered commands:",
+      commands.map(command => "/" + command.name).join(", ")
+    );
+
   } catch (err) {
 
+    console.error("❌ Command registration failed:");
     console.error(err);
 
   }
