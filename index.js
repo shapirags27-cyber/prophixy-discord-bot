@@ -597,6 +597,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // =====================================================
         // =====================================================
         // =====================================================
+    // =====================================================
     // ADMIN COMMUNITY PANEL
     // =====================================================
     if (interaction.commandName === "panel") {
@@ -653,22 +654,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
           .setColor(0x0099FF)
           .setTitle("👤 Prophixy Profile")
           .setDescription(
-            "View your Prophixy account information.\n\n" +
-            "Your profile shows:\n" +
-            "💰 PHX balance\n" +
+            "View your personal Prophixy account information.\n\n" +
+            "Your profile includes:\n\n" +
+            "💰 PHX Balance\n" +
             "🏆 Wins\n" +
             "❌ Losses\n" +
             "📊 Predictions\n" +
             "🎯 Accuracy\n" +
             "🔥 Streak\n" +
             "👥 Invites\n" +
-            "👛 Connected wallet\n" +
-            "🎖️ SBT role\n\n" +
+            "👛 Connected Wallet\n" +
+            "🎖️ SBT Role\n\n" +
             "Click the button below to view your profile."
           )
           .setFooter({
             text: "Prophixy • Shape Africa's Future"
-          });
+          })
+          .setTimestamp();
 
         const profileButton = new ButtonBuilder()
           .setCustomId("prophixy_profile")
@@ -714,7 +716,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           )
           .setFooter({
             text: "Prophixy • Shape Africa's Future"
-          });
+          })
+          .setTimestamp();
 
         const leaderboardButton = new ButtonBuilder()
           .setCustomId("prophixy_leaderboard")
@@ -733,70 +736,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // =====================================================
         // COMMUNITY PANEL
         // =====================================================
+        // Profile and Leaderboard are intentionally NOT placed
+        // in this panel because they have their own channels.
 
         const embed = new EmbedBuilder()
           .setColor(0x0099FF)
           .setTitle("🔮 Prophixy Community")
           .setDescription(
             "Predict Smarter. Decide Better. Shape Africa's Future.\n\n" +
-            "Use the buttons below to access Prophixy features.\n\n" +
-            "👤 **Profile** — View your Prophixy account\n" +
-            "🏆 **PHX Leaderboard** — See the top PHX holders\n" +
-            "🎁 **Generate Invite** — Create your personal invite\n" +
-            "🔐 **Verify Wallet** — Verify your Prophixy SBT\n" +
-            "🎫 **Support** — Open a private support ticket"
+            "Use the dedicated Prophixy channels for community features.\n\n" +
+            "🎁 **Invite** — Invite friends and earn PHX\n" +
+            "🔐 **Wallet Verification** — Verify your Prophixy SBT\n" +
+            "🎫 **Support** — Open a private support ticket\n\n" +
+            "👤 **Profile** — Visit the dedicated Profile channel\n" +
+            "🏆 **Leaderboard** — Visit the dedicated PHX Leaderboard channel"
           )
           .setFooter({
             text: "Prophixy • Shape Africa's Future"
           })
           .setTimestamp();
 
-        const row1 = new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId("prophixy_profile")
-              .setLabel("Profile")
-              .setEmoji("👤")
-              .setStyle(ButtonStyle.Primary),
-
-            new ButtonBuilder()
-              .setCustomId("prophixy_leaderboard")
-              .setLabel("PHX Leaderboard")
-              .setEmoji("🏆")
-              .setStyle(ButtonStyle.Primary)
-          );
-
-        const row2 = new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId("generate_prophixy_invite")
-              .setLabel("Generate Invite")
-              .setEmoji("🎁")
-              .setStyle(ButtonStyle.Success),
-
-            new ButtonBuilder()
-              .setLabel("Verify Wallet")
-              .setEmoji("🔐")
-              .setStyle(ButtonStyle.Link)
-              .setURL("https://prophixy-verify.onrender.com"),
-
-            new ButtonBuilder()
-              .setCustomId("open_prophixy_ticket")
-              .setLabel("Support")
-              .setEmoji("🎫")
-              .setStyle(ButtonStyle.Primary)
-          );
-
         await interaction.channel.send({
-          embeds: [embed],
-          components: [row1, row2]
+          embeds: [embed]
         });
 
         await interaction.editReply({
           content:
-            `✅ Prophixy panels created.\n\n` +
-            `👤 Profile: ${profileChannel}\n` +
-            `🏆 Leaderboard: ${leaderboardChannel}\n` +
+            `✅ Prophixy panels created successfully.\n\n` +
+            `👤 Profile channel: ${profileChannel}\n` +
+            `🏆 Leaderboard channel: ${leaderboardChannel}\n` +
             `🔮 Community panel: ${interaction.channel}`
         });
 
@@ -816,7 +784,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // =====================================================
     // PROFILE BUTTON
     // =====================================================
 
