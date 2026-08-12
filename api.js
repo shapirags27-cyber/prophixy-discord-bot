@@ -1,32 +1,76 @@
 const express = require("express");
 
+const {
+  getUser,
+  createUser,
+  updateUser,
+  db
+} = require("./services/database");
+
 module.exports = (client) => {
   const app = express();
 
   app.use(express.json());
 
-app.get("/health", (req, res) => {
+  // ==============================
+  // HEALTH
+  // ==============================
+
+  app.get("/health", (req, res) => {
     res.json({
-        status: "ok",
-        service: "Prophixy Discord Bot API",
-        bot: client.user?.tag || "starting"
+      status: "ok",
+      service: "Prophixy Discord Bot API",
+      bot: client.user?.tag || "starting"
     });
-});
+  });
+
+  // ==============================
+  // ASSIGN ROLE + LINK WALLET
+  // + VERIFY SBT
+  // + AWARD PHX
+  // ==============================
 
   app.post("/assign-role", async (req, res) => {
-    try {
-      const { guildId, userId, roleName } = req.body;
 
-      console.log("🔐 ROLE ASSIGN REQUEST:", {
+    // ==============================
+    // VERIFY API AUTHENTICATION
+    // ==============================
+
+    const providedSecret =
+      req.get("X-Verify-Secret");
+
+    if (
+      !process.env.VERIFY_API_SECRET ||
+      providedSecret !== process.env.VERIFY_API_SECRET
+    ) {
+      console.error("❌ Unauthorized /assign-role request.");
+
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    try {
+      const {
         guildId,
         userId,
-        roleName
+        roleName,
+        wallet
+      } = req.body;
+
+      console.log("🔐 ROLE / WALLET REQUEST:", {
+        guildId,
+        userId,
+        roleName,
+        wallet
       });
 
       if (!guildId || !userId || !roleName) {
         return res.status(400).json({
           success: false,
-          message: "Missing guildId, userId, or roleName"
+          message:
+            "Missing guildId, userId, or roleName"
         });
       }
 
@@ -34,7 +78,8 @@ app.get("/health", (req, res) => {
       // GET GUILD
       // ==============================
 
-      const guild = await client.guilds.fetch(guildId);
+      const guild =
+        await client.guilds.fetch(guildId);
 
       console.log(
         `✅ Guild found: ${guild.name} (${guild.id})`
@@ -47,7 +92,8 @@ app.get("/health", (req, res) => {
       let member;
 
       try {
-        member = await guild.members.fetch(userId);
+        member =
+          await guild.members.fetch(userId);
       } catch (error) {
         console.error(
           "❌ Could not fetch Discord member:",
@@ -56,7 +102,8 @@ app.get("/health", (req, res) => {
 
         return res.status(404).json({
           success: false,
-          message: "Discord member not found in guild",
+          message:
+            "Discord member not found in guild",
           error: error.message
         });
       }
@@ -69,28 +116,22 @@ app.get("/health", (req, res) => {
       // FIND TARGET ROLE
       // ==============================
 
-      const role = guild.roles.cache.find(
-        r =>
-          r.name.trim().toLowerCase() ===
-          roleName.trim().toLowerCase()
-      );
+      const role =
+        guild.roles.cache.find(
+          r =>
+            r.name.trim().toLowerCase() ===
+            roleName.trim().toLowerCase()
+        );
 
       if (!role) {
         console.error(
           `❌ Role not found: "${roleName}"`
         );
 
-        console.log(
-          "Available roles:",
-          guild.roles.cache
-            .filter(r => r.name !== "@everyone")
-            .map(r => `${r.name} (${r.id})`)
-            .join(", ")
-        );
-
         return res.status(404).json({
           success: false,
-          message: `Role "${roleName}" was not found`
+          message:
+            `Role "${roleName}" was not found`
         });
       }
 
@@ -102,26 +143,15 @@ app.get("/health", (req, res) => {
       // CHECK BOT ROLE HIERARCHY
       // ==============================
 
-      const botMember = await guild.members.fetchMe();
-
-      console.log(
-        `🤖 Bot highest role: ${botMember.roles.highest.name} (${botMember.roles.highest.id})`
-      );
-
-      console.log(
-        `🎖️ Target role position: ${role.position}`
-      );
-
-      console.log(
-        `🤖 Bot highest role position: ${botMember.roles.highest.position}`
-      );
+      const botMember =
+        await guild.members.fetchMe();
 
       if (
         role.position >=
         botMember.roles.highest.position
       ) {
         console.error(
-          "❌ ROLE HIERARCHY ERROR: Bot role is not above target role."
+          "❌ ROLE HIERARCHY ERROR"
         );
 
         return res.status(403).json({
@@ -129,6 +159,66 @@ app.get("/health", (req, res) => {
           message:
             "Bot cannot assign this role because its highest role is not above the target role."
         });
+      }
+
+      // ==============================
+      // GET / CREATE DATABASE USER
+      // ==============================
+
+      let user =
+        await getUser(userId);
+
+      if (!user) {
+        user =
+          await createUser(
+            userId,
+            member.user.username
+          );
+
+        console.log(
+          `✅ Created database user for ${member.user.tag}`
+        );
+      }
+
+      // ==============================
+      // WALLET OWNERSHIP CHECK
+      // ==============================
+
+      if (wallet) {
+
+        const normalizedWallet =
+          wallet.toLowerCase();
+
+        await db.read();
+
+        const walletOwner =
+          db.data.users.find(existing => {
+
+            if (
+              existing.discordId === userId
+            ) {
+              return false;
+            }
+
+            return (
+              existing.wallet &&
+              existing.wallet.toLowerCase() ===
+                normalizedWallet
+            );
+          });
+
+        if (walletOwner) {
+
+          console.error(
+            `❌ Wallet already linked to Discord ${walletOwner.discordId}`
+          );
+
+          return res.status(409).json({
+            success: false,
+            message:
+              "This wallet is already linked to another Discord account."
+          });
+        }
       }
 
       // ==============================
@@ -140,9 +230,10 @@ app.get("/health", (req, res) => {
         "Market Creator"
       ];
 
-      for (const creatorRoleName of creatorRoles) {
+      for (
+        const creatorRoleName of creatorRoles
+      ) {
 
-        // Don't remove the role we're assigning
         if (
           creatorRoleName.toLowerCase() ===
           role.name.toLowerCase()
@@ -161,11 +252,14 @@ app.get("/health", (req, res) => {
           otherRole &&
           member.roles.cache.has(otherRole.id)
         ) {
+
           console.log(
             `🔄 Removing "${otherRole.name}" from ${member.user.tag}`
           );
 
-          await member.roles.remove(otherRole);
+          await member.roles.remove(
+            otherRole
+          );
 
           console.log(
             `✅ Removed "${otherRole.name}"`
@@ -174,47 +268,154 @@ app.get("/health", (req, res) => {
       }
 
       // ==============================
-      // CHECK IF ALREADY HAS ROLE
+      // ASSIGN DISCORD ROLE
       // ==============================
 
-      if (member.roles.cache.has(role.id)) {
+      if (
+        !member.roles.cache.has(role.id)
+      ) {
+
+        console.log(
+          `🎖️ Assigning "${role.name}" to ${member.user.tag}...`
+        );
+
+        await member.roles.add(role);
+
+        console.log(
+          `✅ Successfully assigned "${role.name}"`
+        );
+
+      } else {
 
         console.log(
           `ℹ️ ${member.user.tag} already has ${role.name}`
         );
-
-        return res.json({
-          success: true,
-          alreadyHadRole: true,
-          roleName: role.name,
-          roleId: role.id
-        });
       }
 
       // ==============================
-      // ASSIGN ROLE
+      // UPDATE DATABASE
       // ==============================
 
+      await db.read();
+
+      const latestUser =
+        db.data.users.find(
+          existing =>
+            existing.discordId === userId
+        );
+
+      if (!latestUser) {
+        throw new Error(
+          "Database user disappeared during verification."
+        );
+      }
+
+      // Link wallet
+      if (wallet) {
+        latestUser.wallet = wallet;
+      }
+
+      // Save SBT information
+      latestUser.sbt ||= {};
+
+      latestUser.sbt.verified = true;
+      latestUser.sbt.role = role.name;
+
+      // ==============================
+      // ONE-TIME SBT REWARD
+      // ==============================
+
+      let reward = 0;
+      let rewardClaimed = false;
+
+      if (
+        latestUser.sbt.rewardClaimed !== true
+      ) {
+
+        if (
+          role.name.toLowerCase() ===
+          "top forecaster".toLowerCase()
+        ) {
+
+          reward = 20000;
+
+        } else if (
+          role.name.toLowerCase() ===
+          "market creator".toLowerCase()
+        ) {
+
+          reward = 15000;
+        }
+
+        if (reward > 0) {
+
+          latestUser.phx =
+            Number(latestUser.phx || 0) +
+            reward;
+
+          latestUser.sbt.rewardClaimed = true;
+
+          rewardClaimed = true;
+
+          console.log(
+            `🎁 Awarded ${reward} PHX to ${member.user.tag}`
+          );
+        }
+      } else {
+
+        console.log(
+          `ℹ️ SBT reward already claimed by ${member.user.tag}`
+        );
+      }
+
+      // ==============================
+      // SAVE DATABASE
+      // ==============================
+
+      await db.write();
+
       console.log(
-        `🎖️ Assigning "${role.name}" to ${member.user.tag}...`
+        `💾 Saved SBT/wallet data for ${member.user.tag}`
       );
 
-      await member.roles.add(role);
-
-      console.log(
-        `✅ Successfully assigned "${role.name}" to ${member.user.tag}`
-      );
+      // ==============================
+      // SUCCESS
+      // ==============================
 
       return res.json({
         success: true,
+
         roleName: role.name,
-        roleId: role.id
+        roleId: role.id,
+
+        wallet:
+          latestUser.wallet || "",
+
+        sbt: {
+          verified:
+            latestUser.sbt.verified,
+          role:
+            latestUser.sbt.role,
+          rewardClaimed:
+            latestUser.sbt.rewardClaimed
+        },
+
+        reward,
+        rewardClaimed,
+
+        phxBalance:
+          Number(latestUser.phx || 0),
+
+        message:
+          rewardClaimed
+            ? "SBT verified, wallet linked, role assigned, and PHX reward granted."
+            : "SBT verified, wallet linked, and role confirmed."
       });
 
     } catch (err) {
 
       console.error(
-        "❌ ROLE ASSIGNMENT ERROR:"
+        "❌ ROLE / WALLET ASSIGNMENT ERROR:"
       );
 
       console.error(err);
@@ -231,11 +432,16 @@ app.get("/health", (req, res) => {
   // START DISCORD BOT API
   // ==============================
 
-  const PORT = process.env.PORT || 4000;
+  const PORT =
+    process.env.PORT || 4000;
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(
-      `Discord API listening on port ${PORT}`
-    );
-  });
+  app.listen(
+    PORT,
+    "0.0.0.0",
+    () => {
+      console.log(
+        `Discord API listening on port ${PORT}`
+      );
+    }
+  );
 };
