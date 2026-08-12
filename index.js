@@ -54,23 +54,162 @@ client.once(Events.ClientReady, async () => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
-  if (interaction.isButton() && interaction.customId === "generate_prophixy_invite") {
-    console.log(
-      "⏱️ INVITE RECEIVED:",
-      new Date().toISOString(),
-      "created:",
-      interaction.createdAt.toISOString(),
-      "delay:",
-      `${Date.now() - interaction.createdTimestamp}ms`
-    );
-  }
+  console.log(
+    "🔔 INTERACTION RECEIVED:",
+    interaction.id,
+    interaction.isButton() ? interaction.customId : interaction.type,
+    "age:",
+    `${Date.now() - interaction.createdTimestamp}ms`
+  );
 
   try {
 
-    // -----------------------------
+    // =====================================================
     // BUTTON INTERACTIONS
-    // -----------------------------
+    // =====================================================
+
     if (interaction.isButton()) {
+
+      // =====================================================
+      // PROFILE BUTTON
+      // =====================================================
+
+      if (interaction.customId === "prophixy_profile") {
+
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral
+        });
+
+        try {
+
+          let user = await getUser(interaction.user.id);
+
+          if (!user) {
+            user = await createUser(
+              interaction.user.id,
+              interaction.user.username
+            );
+          }
+
+          await interaction.editReply({
+            content:
+`# 👤 ${interaction.user.username}
+
+💰 PHX: ${Number(user.phx || 0).toLocaleString()}
+
+🏆 Wins: ${user.wins || 0}
+
+❌ Losses: ${user.losses || 0}
+
+📊 Predictions: ${user.totalPredictions || 0}
+
+🎯 Accuracy: ${user.accuracy || 0}%
+
+🔥 Streak: ${user.streak || 0}
+
+👥 Invites: ${user.invites || 0}
+
+👛 Wallet:
+${user.wallet || "Not Connected"}
+
+🎖 SBT:
+${user.sbt?.role || "Not Verified"}`
+          });
+
+        } catch (error) {
+
+          console.error(
+            "❌ Profile button error:",
+            error
+          );
+
+          await interaction.editReply({
+            content: "❌ Unable to load your profile."
+          }).catch(() => {});
+
+        }
+
+        return;
+      }
+
+
+      // =====================================================
+      // PHX LEADERBOARD BUTTON
+      // =====================================================
+
+      if (interaction.customId === "prophixy_leaderboard") {
+
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral
+        });
+
+        try {
+
+          const users = await getLeaderboard(10);
+
+          if (!users.length) {
+
+            return interaction.editReply({
+              content:
+                "📊 The PHX leaderboard is currently empty."
+            });
+
+          }
+
+          const medals = ["🥇", "🥈", "🥉"];
+
+          const lines = users.map((user, index) => {
+
+            const position =
+              medals[index] || `**${index + 1}.**`;
+
+            return (
+              `${position} <@${user.discordId}> — ` +
+              `**${Number(user.phx || 0).toLocaleString()} PHX**`
+            );
+
+          });
+
+          const rank =
+            await getUserRank(interaction.user.id);
+
+          const leaderboardEmbed =
+            new EmbedBuilder()
+              .setColor(0x0099FF)
+              .setTitle("🏆 Prophixy PHX Leaderboard")
+              .setDescription(lines.join("\n"))
+              .setFooter({
+                text: rank
+                  ? `Your rank: #${rank.rank} • ${Number(rank.phx || 0).toLocaleString()} PHX`
+                  : "Your account is not yet ranked"
+              })
+              .setTimestamp();
+
+          await interaction.editReply({
+            embeds: [leaderboardEmbed]
+          });
+
+        } catch (error) {
+
+          console.error(
+            "❌ PHX leaderboard button error:",
+            error
+          );
+
+          await interaction.editReply({
+            content:
+              "❌ Unable to load the PHX leaderboard."
+          }).catch(() => {});
+
+        }
+
+        return;
+      }
+
+
+      // =====================================================
+      // CLOSE SUPPORT TICKET
+      // =====================================================
 
       if (interaction.customId === "close_prophixy_ticket") {
 
@@ -78,17 +217,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
           const channel = interaction.channel;
 
-          if (!channel || channel.type !== ChannelType.GuildText) {
+          if (
+            !channel ||
+            channel.type !== ChannelType.GuildText
+          ) {
 
             await interaction.reply({
-              content: "❌ This is not a ticket channel.",
+              content:
+                "❌ This is not a ticket channel.",
               flags: MessageFlags.Ephemeral
             }).catch(() => {});
 
             return;
           }
 
-          // Acknowledge immediately.
           await interaction.reply({
             content:
               "🔒 Ticket closed. This channel will be deleted in 5 seconds.",
@@ -132,29 +274,45 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      if (interaction.customId === "generate_prophixy_invite") {
+
+      // =====================================================
+      // GENERATE INVITE
+      // =====================================================
+
+      if (
+        interaction.customId ===
+        "generate_prophixy_invite"
+      ) {
 
         try {
 
-          // Acknowledge Discord immediately.
           await interaction.deferReply({
             flags: MessageFlags.Ephemeral
           });
 
-          console.log("✅ Invite interaction acknowledged immediately.");
+          console.log(
+            "✅ Invite interaction acknowledged immediately."
+          );
 
-          // Now perform the slower invite generation work.
           await handleGenerateInvite(interaction);
 
         } catch (error) {
 
-          console.error("❌ Invite interaction error:", error);
+          console.error(
+            "❌ Invite interaction error:",
+            error
+          );
 
-          if (interaction.deferred && !interaction.replied) {
+          if (
+            interaction.deferred &&
+            !interaction.replied
+          ) {
+
             await interaction.editReply({
               content:
                 "❌ I couldn't generate your invite. Please try again."
             }).catch(() => {});
+
           }
 
         }
@@ -162,20 +320,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      // ==============================
-      // OPEN SUPPORT TICKET
-      // ==============================
 
-      // ==============================
+      // =====================================================
       // CONNECT & VERIFY WALLET
-      // ==============================
-      if (interaction.customId === "connect_verify_wallet") {
+      // =====================================================
+
+      if (
+        interaction.customId ===
+        "connect_verify_wallet"
+      ) {
 
         try {
-
-          console.log(
-            `🔗 Wallet verification redirect requested by ${interaction.user.tag}`
-          );
 
           await interaction.reply({
             content:
@@ -197,7 +352,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      if (interaction.customId === "open_prophixy_ticket") {
+
+      // =====================================================
+      // OPEN SUPPORT TICKET
+      // =====================================================
+
+      if (
+        interaction.customId ===
+        "open_prophixy_ticket"
+      ) {
 
         try {
 
@@ -205,181 +368,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
             flags: MessageFlags.Ephemeral
           });
 
-          const guild = interaction.guild;
-
-          if (!guild) {
-            return interaction.editReply({
-              content:
-                "❌ This ticket can only be opened inside the Prophixy server."
-            });
-          }
-
-          const user = interaction.user;
-
-          // Check if user already has an open ticket
-          const existingTicket = guild.channels.cache.find(
-            channel =>
-              channel.type === ChannelType.GuildText &&
-              channel.name === `ticket-${user.username.toLowerCase()}`
-          );
-
-          if (existingTicket) {
-            return interaction.editReply({
-              content:
-                `🎫 You already have an open ticket: ${existingTicket}`
-            });
-          }
-
-          // Find or create ticket category
-          let category = guild.channels.cache.find(
-            channel =>
-              channel.type === ChannelType.GuildCategory &&
-              channel.name === "🎫 SUPPORT TICKETS"
-          );
-
-          if (!category) {
-
-            category = await guild.channels.create({
-              name: "🎫 SUPPORT TICKETS",
-              type: ChannelType.GuildCategory
-            });
-
-          }
-
-          // Find staff roles
-          const staffRoleNames = [
-            "Mod",
-            "Moderator",
-            "Team"
-          ];
-
-          const staffRoles = guild.roles.cache.filter(role =>
-            staffRoleNames.some(
-              name =>
-                role.name.toLowerCase() === name.toLowerCase()
-            )
-          );
-
-          // Permission overwrites
-          const permissionOverwrites = [
-
-            {
-              id: guild.id,
-              deny: [
-                PermissionFlagsBits.ViewChannel
-              ]
-            },
-
-            {
-              id: user.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-                PermissionFlagsBits.AttachFiles
-              ]
-            },
-
-            {
-              id: guild.members.me.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-                PermissionFlagsBits.ManageChannels,
-                PermissionFlagsBits.ManageMessages
-              ]
-            }
-
-          ];
-
-          // Give staff access
-          for (const role of staffRoles.values()) {
-
-            permissionOverwrites.push({
-              id: role.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-                PermissionFlagsBits.AttachFiles
-              ]
-            });
-
-          }
-
-          // Create ticket channel
-          const ticketChannel = await guild.channels.create({
-
-            name: `ticket-${user.username.toLowerCase()}`,
-
-            type: ChannelType.GuildText,
-
-            parent: category.id,
-
-            permissionOverwrites
-
-          });
-
-          // Ticket embed
-          const embed = new EmbedBuilder()
-            .setTitle("🎫 Prophixy Support Ticket")
-            .setDescription(
-              `Hello ${user}, welcome to Prophixy Support!\n\n` +
-              `A member of the **Prophixy Team / Moderation team** will assist you shortly.\n\n` +
-              `Please explain your issue clearly and provide any relevant information.\n\n` +
-              `🔒 This channel is private.`
-            )
-            .addFields(
-              {
-                name: "👤 User",
-                value: `${user}`,
-                inline: true
-              },
-              {
-                name: "📌 Status",
-                value: "🟢 Open",
-                inline: true
-              }
-            )
-            .setFooter({
-              text: "Prophixy • Shape Africa’s Future"
-            });
-
-          // Close button
-          const closeButton = new ButtonBuilder()
-            .setCustomId("close_prophixy_ticket")
-            .setLabel("Close Ticket")
-            .setEmoji("🔒")
-            .setStyle(ButtonStyle.Danger);
-
-          const row = new ActionRowBuilder()
-            .addComponents(closeButton);
-
-          await ticketChannel.send({
-            content: `${user}`,
-            embeds: [embed],
-            components: [row]
-          });
-
-          await interaction.editReply({
-            content:
-              `✅ Your support ticket has been created: ${ticketChannel}`
-          });
-
-          console.log(
-            `🎫 Ticket created for ${user.tag}: #${ticketChannel.name}`
-          );
+          await handleOpenTicket(interaction);
 
         } catch (error) {
 
-          console.error("❌ Ticket creation error:", error);
+          console.error(
+            "❌ Support ticket interaction error:",
+            error
+          );
 
-          if (interaction.deferred || interaction.replied) {
+          if (
+            interaction.deferred &&
+            !interaction.replied
+          ) {
 
             await interaction.editReply({
               content:
-                "❌ I couldn't create your ticket. Please contact a moderator."
+                "❌ Could not create your support ticket."
             }).catch(() => {});
 
           }
@@ -389,217 +394,44 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      // ==============================
-      // CLOSE SUPPORT TICKET
-      // ==============================
 
-      if (interaction.customId === "close_prophixy_ticket") {
+      // =====================================================
+      // PREDICTION BUTTON
+      // =====================================================
 
-        try {
+      if (
+        interaction.customId.startsWith("vote_")
+      ) {
 
-          await interaction.deferReply({
-            flags: MessageFlags.Ephemeral
-          });
-
-          const channel = interaction.channel;
-
-          if (!channel || channel.type !== ChannelType.GuildText) {
-            return interaction.editReply({
-              content: "❌ This is not a ticket channel."
-            });
-          }
-
-          await interaction.editReply({
-            content:
-              "🔒 Ticket closed. This channel will be deleted in 5 seconds."
-          });
-
-          setTimeout(async () => {
-
-            await channel.delete(
-              "Prophixy support ticket closed"
-            ).catch(error => {
-              console.error(
-                "❌ Could not delete ticket:",
-                error
-              );
-            });
-
-          }, 5000);
-
-        } catch (error) {
-
-          console.error(
-            "❌ Ticket close error:",
-            error
-          );
-
-        }
-
-        return;
-      }
-
-      // ==============================
-      // VOTE BUTTONS
-      // ==============================
-
-      if (interaction.customId.startsWith("vote_")) {
         await handleVote(interaction);
+
         return;
       }
 
-      return;
-    }
-
-    // =====================================================
-    // PHX STAKE MODAL
-    // =====================================================
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId.startsWith("stake_")
-    ) {
-
-      try {
-
-        await handleStakeSubmit(interaction);
-
-      } catch (error) {
-
-        console.error(
-          "❌ PHX stake submission error:",
-          error
-        );
-
-        if (
-          interaction.deferred ||
-          interaction.replied
-        ) {
-
-          await interaction.editReply({
-            content:
-              `❌ Unable to submit prediction.\n\nReason: ${error.message}`
-          }).catch(() => {});
-
-        } else {
-
-          await interaction.reply({
-            content:
-              `❌ Unable to submit prediction.\n\nReason: ${error.message}`,
-            ephemeral: true
-          }).catch(() => {});
-
-        }
-
-      }
-
-      return;
-    }
-
-    // =====================================================
-    // WALLET VERIFICATION MODAL
-    // =====================================================
-    if (
-      interaction.isModalSubmit() &&
-      interaction.customId === "wallet_verification_modal"
-    ) {
-
-      try {
-
-        const walletAddress =
-          interaction.fields.getTextInputValue("wallet_address").trim();
-
-        await interaction.deferReply({
-          flags: MessageFlags.Ephemeral
-        });
-
-        console.log(
-          `🔐 Verifying wallet for ${interaction.user.tag}: ${walletAddress}`
-        );
-
-        // Get or create Prophixy user
-        let user = await getUser(interaction.user.id);
-
-        if (!user) {
-          user = await createUser(
-            interaction.user.id,
-            interaction.user.username
-          );
-        }
-
-        // Verify the SBT on Sepolia
-        const verification =
-          await verifySBT(walletAddress);
-
-        if (!verification.verified) {
-
-          return interaction.editReply({
-            content:
-              "❌ No valid Prophixy SBT was found in this wallet."
-          });
-
-        }
-
-        // Assign the matching Discord role
-        await assignSbtRole(
-          interaction.guild,
-          interaction.user.id,
-          verification.role
-        );
-
-        // Save verification
-        user.wallet =
-          verification.walletAddress;
-
-        user.sbt = {
-          verified: true,
-          role: verification.role
-        };
-
-        await save();
-
-        console.log(
-          `✅ Wallet verified for ${interaction.user.tag}: ${verification.role}`
-        );
-
-        return interaction.editReply({
-          content:
-            `✅ **Wallet verified successfully!**\n\n` +
-            `👛 Wallet: \`${verification.walletAddress}\`\n` +
-            `🎖️ SBT Role: **${verification.role}**\n\n` +
-            `🎉 Your Discord role has been assigned.`
-        });
-
-      } catch (error) {
-
-        console.error(
-          "❌ Wallet verification error:",
-          error
-        );
-
-        if (interaction.deferred || interaction.replied) {
-
-          return interaction.editReply({
-            content:
-              `❌ Unable to verify wallet.\n\nReason: ${error.message}`
-          }).catch(() => {});
-
-        }
-
-      }
-
-      return;
     }
 
 
-    console.log("Command received:", interaction.commandName);
-
     // =====================================================
-        // =====================================================
-        // =====================================================
+    // SLASH COMMANDS ONLY
+    // =====================================================
+
+    if (!interaction.isChatInputCommand()) {
+      return;
+    }
+
+    console.log(
+      "Command received:",
+      interaction.commandName
+    );
+
+
     // =====================================================
     // ADMIN COMMUNITY PANEL
     // =====================================================
-    if (interaction.commandName === "panel") {
+
+    if (
+      interaction.commandName === "panel"
+    ) {
 
       if (
         !interaction.member ||
@@ -607,11 +439,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           PermissionFlagsBits.Administrator
         )
       ) {
+
         return interaction.reply({
           content:
             "❌ You don't have permission to use the Prophixy panel command.",
           flags: MessageFlags.Ephemeral
         });
+
       }
 
       await interaction.deferReply({
@@ -619,153 +453,258 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
 
       try {
+
         const guild = interaction.guild;
 
         if (!guild) {
+
           return interaction.editReply({
             content:
               "❌ This command can only be used inside the Prophixy server."
           });
+
         }
+
 
         // =====================================================
         // PROFILE CHANNEL
         // =====================================================
 
-        let profileChannel = guild.channels.cache.find(
-          channel =>
-            channel.type === ChannelType.GuildText &&
-            channel.name === "👤・profile"
-        );
+        let profileChannel =
+          guild.channels.cache.find(
+            channel =>
+              channel.type === ChannelType.GuildText &&
+              channel.name === "👤・profile"
+          );
 
         if (!profileChannel) {
-          profileChannel = await guild.channels.create({
-            name: "👤・profile",
-            type: ChannelType.GuildText
-          });
+
+          profileChannel =
+            await guild.channels.create({
+              name: "👤・profile",
+              type: ChannelType.GuildText
+            });
 
           console.log(
             `✅ Created #${profileChannel.name}`
           );
+
         }
 
-        const profileEmbed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle("👤 Prophixy Profile")
-          .setDescription(
-            "View your personal Prophixy account information.\n\n" +
-            "Your profile includes:\n\n" +
-            "💰 PHX Balance\n" +
-            "🏆 Wins\n" +
-            "❌ Losses\n" +
-            "📊 Predictions\n" +
-            "🎯 Accuracy\n" +
-            "🔥 Streak\n" +
-            "👥 Invites\n" +
-            "👛 Connected Wallet\n" +
-            "🎖️ SBT Role\n\n" +
-            "Click the button below to view your profile."
-          )
-          .setFooter({
-            text: "Prophixy • Shape Africa's Future"
-          })
-          .setTimestamp();
 
-        const profileButton = new ButtonBuilder()
-          .setCustomId("prophixy_profile")
-          .setLabel("View My Profile")
-          .setEmoji("👤")
-          .setStyle(ButtonStyle.Primary);
+        const profileEmbed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle("👤 Prophixy Profile")
+            .setDescription(
+              "View your Prophixy account information.\n\n" +
+              "Your profile shows:\n" +
+              "💰 PHX balance\n" +
+              "🏆 Wins\n" +
+              "❌ Losses\n" +
+              "📊 Predictions\n" +
+              "🎯 Accuracy\n" +
+              "🔥 Streak\n" +
+              "👥 Invites\n" +
+              "👛 Connected wallet\n" +
+              "🎖️ SBT role\n\n" +
+              "Click the button below to view your profile."
+            )
+            .setFooter({
+              text:
+                "Prophixy • Shape Africa's Future"
+            });
 
-        const profileRow = new ActionRowBuilder()
-          .addComponents(profileButton);
+
+        const profileButton =
+          new ButtonBuilder()
+            .setCustomId(
+              "prophixy_profile"
+            )
+            .setLabel(
+              "View My Profile"
+            )
+            .setEmoji("👤")
+            .setStyle(
+              ButtonStyle.Primary
+            );
+
+
+        const profileRow =
+          new ActionRowBuilder()
+            .addComponents(
+              profileButton
+            );
+
 
         await profileChannel.send({
           embeds: [profileEmbed],
           components: [profileRow]
         });
 
+
         // =====================================================
         // PHX LEADERBOARD CHANNEL
         // =====================================================
 
-        let leaderboardChannel = guild.channels.cache.find(
-          channel =>
-            channel.type === ChannelType.GuildText &&
-            channel.name === "🏆・phx-leaderboard"
-        );
+        let leaderboardChannel =
+          guild.channels.cache.find(
+            channel =>
+              channel.type === ChannelType.GuildText &&
+              channel.name ===
+                "🏆・phx-leaderboard"
+          );
 
         if (!leaderboardChannel) {
-          leaderboardChannel = await guild.channels.create({
-            name: "🏆・phx-leaderboard",
-            type: ChannelType.GuildText
-          });
+
+          leaderboardChannel =
+            await guild.channels.create({
+              name:
+                "🏆・phx-leaderboard",
+              type:
+                ChannelType.GuildText
+            });
 
           console.log(
             `✅ Created #${leaderboardChannel.name}`
           );
+
         }
 
-        const leaderboardEmbed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle("🏆 Prophixy PHX Leaderboard")
-          .setDescription(
-            "See the top PHX holders in the Prophixy community.\n\n" +
-            "Click the button below to view the current leaderboard."
-          )
-          .setFooter({
-            text: "Prophixy • Shape Africa's Future"
-          })
-          .setTimestamp();
 
-        const leaderboardButton = new ButtonBuilder()
-          .setCustomId("prophixy_leaderboard")
-          .setLabel("View PHX Leaderboard")
-          .setEmoji("🏆")
-          .setStyle(ButtonStyle.Primary);
+        const leaderboardEmbed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(
+              "🏆 Prophixy PHX Leaderboard"
+            )
+            .setDescription(
+              "See the top PHX holders in the Prophixy community.\n\n" +
+              "Click the button below to view the current leaderboard."
+            )
+            .setFooter({
+              text:
+                "Prophixy • Shape Africa's Future"
+            });
 
-        const leaderboardRow = new ActionRowBuilder()
-          .addComponents(leaderboardButton);
+
+        const leaderboardButton =
+          new ButtonBuilder()
+            .setCustomId(
+              "prophixy_leaderboard"
+            )
+            .setLabel(
+              "View PHX Leaderboard"
+            )
+            .setEmoji("🏆")
+            .setStyle(
+              ButtonStyle.Primary
+            );
+
+
+        const leaderboardRow =
+          new ActionRowBuilder()
+            .addComponents(
+              leaderboardButton
+            );
+
 
         await leaderboardChannel.send({
           embeds: [leaderboardEmbed],
           components: [leaderboardRow]
         });
 
+
         // =====================================================
         // COMMUNITY PANEL
         // =====================================================
-        // Profile and Leaderboard are intentionally NOT placed
-        // in this panel because they have their own channels.
 
-        const embed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle("🔮 Prophixy Community")
-          .setDescription(
-            "Predict Smarter. Decide Better. Shape Africa's Future.\n\n" +
-            "Use the dedicated Prophixy channels for community features.\n\n" +
-            "🎁 **Invite** — Invite friends and earn PHX\n" +
-            "🔐 **Wallet Verification** — Verify your Prophixy SBT\n" +
-            "🎫 **Support** — Open a private support ticket\n\n" +
-            "👤 **Profile** — Visit the dedicated Profile channel\n" +
-            "🏆 **Leaderboard** — Visit the dedicated PHX Leaderboard channel"
-          )
-          .setFooter({
-            text: "Prophixy • Shape Africa's Future"
-          })
-          .setTimestamp();
+        const embed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(
+              "🔮 Prophixy Community"
+            )
+            .setDescription(
+              "Predict Smarter. Decide Better. Shape Africa's Future.\n\n" +
+              "Use the buttons below to access Prophixy features.\n\n" +
+              "👤 **Profile** — View your Prophixy account\n" +
+              "🏆 **PHX Leaderboard** — See the top PHX holders\n" +
+              "🎁 **Generate Invite** — Create your personal invite\n" +
+              "🔐 **Verify Wallet** — Verify your Prophixy SBT\n" +
+              "🎫 **Support** — Open a private support ticket"
+            )
+            .setFooter({
+              text:
+                "Prophixy • Shape Africa's Future"
+            })
+            .setTimestamp();
+
+
+        // NOTE:
+        // Profile and Leaderboard are intentionally
+        // NOT placed in this community panel.
+        //
+        // They have their own separate channels.
+
+
+        const row =
+          new ActionRowBuilder()
+            .addComponents(
+
+              new ButtonBuilder()
+                .setCustomId(
+                  "generate_prophixy_invite"
+                )
+                .setLabel(
+                  "Generate Invite"
+                )
+                .setEmoji("🎁")
+                .setStyle(
+                  ButtonStyle.Success
+                ),
+
+              new ButtonBuilder()
+                .setLabel(
+                  "Verify Wallet"
+                )
+                .setEmoji("🔐")
+                .setStyle(
+                  ButtonStyle.Link
+                )
+                .setURL(
+                  "https://prophixy-verify.onrender.com"
+                ),
+
+              new ButtonBuilder()
+                .setCustomId(
+                  "open_prophixy_ticket"
+                )
+                .setLabel(
+                  "Support"
+                )
+                .setEmoji("🎫")
+                .setStyle(
+                  ButtonStyle.Primary
+                )
+
+            );
+
 
         await interaction.channel.send({
-          embeds: [embed]
+          embeds: [embed],
+          components: [row]
         });
+
 
         await interaction.editReply({
           content:
-            `✅ Prophixy panels created successfully.\n\n` +
-            `👤 Profile channel: ${profileChannel}\n` +
-            `🏆 Leaderboard channel: ${leaderboardChannel}\n` +
+            `✅ Prophixy panels created.\n\n` +
+            `👤 Profile: ${profileChannel}\n` +
+            `🏆 Leaderboard: ${leaderboardChannel}\n` +
             `🔮 Community panel: ${interaction.channel}`
         });
+
 
       } catch (error) {
 
@@ -778,187 +717,53 @@ client.on(Events.InteractionCreate, async (interaction) => {
           content:
             "❌ Could not create the Prophixy panels."
         }).catch(() => {});
+
       }
 
       return;
     }
 
-    // PROFILE BUTTON
-    // =====================================================
 
     // =====================================================
-
-    // =====================================================
-    if (
-      interaction.isButton() &&
-      interaction.customId === "prophixy_profile"
-    ) {
-
-      try {
-
-        let user = await getUser(interaction.user.id);
-
-        if (!user) {
-          user = await createUser(
-            interaction.user.id,
-            interaction.user.username
-          );
-        }
-
-        await interaction.reply({
-          content:
-`# 👤 ${interaction.user.username}
-
-💰 PHX: ${Number(user.phx || 0).toLocaleString()}
-
-🏆 Wins: ${user.wins || 0}
-
-❌ Losses: ${user.losses || 0}
-
-📊 Predictions: ${user.totalPredictions || 0}
-
-🎯 Accuracy: ${user.accuracy || 0}%
-
-🔥 Streak: ${user.streak || 0}
-
-👥 Invites: ${user.invites || 0}
-
-👛 Wallet:
-${user.wallet || "Not Connected"}
-
-🎖 SBT:
-${user.sbt?.role || "Not Verified"}`
-        });
-
-      } catch (error) {
-
-        console.error(
-          "❌ Profile button error:",
-          error
-        );
-
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content:
-              "❌ Unable to load your profile."
-          }).catch(() => {});
-        }
-      }
-
-      return;
-    }
-
-      // =====================================================
-      // PHX LEADERBOARD PANEL
-      // =====================================================
-      if (
-        interaction.isButton() &&
-        interaction.customId === "prophixy_leaderboard"
-      ) {
-
-        try {
-
-          await interaction.deferReply({
-            flags: MessageFlags.Ephemeral
-          });
-
-          const users = await getLeaderboard(10);
-
-          if (!users.length) {
-            return interaction.editReply({
-              content:
-                "📊 The PHX leaderboard is currently empty."
-            });
-          }
-
-          const medals = ["🥇", "🥈", "🥉"];
-
-          const lines = users.map((user, index) => {
-
-            const position =
-              medals[index] || `**${index + 1}.**`;
-
-            return (
-              `${position} <@${user.discordId}> — ` +
-              `**${Number(user.phx || 0).toLocaleString()} PHX**`
-            );
-          });
-
-          const rank =
-            await getUserRank(interaction.user.id);
-
-          const leaderboardEmbed = new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle("🏆 Prophixy PHX Leaderboard")
-            .setDescription(
-              lines.join("\n")
-            )
-            .setFooter({
-              text: rank
-                ? `Your rank: #${rank.rank} • ${Number(rank.phx || 0).toLocaleString()} PHX`
-                : "Your account is not yet ranked"
-            })
-            .setTimestamp();
-
-          await interaction.editReply({
-            embeds: [leaderboardEmbed]
-          });
-
-        } catch (error) {
-
-          console.error(
-            "❌ PHX leaderboard panel error:",
-            error
-          );
-
-          if (
-            interaction.deferred ||
-            interaction.replied
-          ) {
-            await interaction.editReply({
-              content:
-                "❌ Unable to load the PHX leaderboard."
-            }).catch(() => {});
-          } else {
-            await interaction.reply({
-              content:
-                "❌ Unable to load the PHX leaderboard.",
-              flags: MessageFlags.Ephemeral
-            }).catch(() => {});
-          }
-        }
-
-        return;
-      }
-// =====================================================
     // RESOLVE MARKET
     // =====================================================
-    if (interaction.commandName === "resolve") {
+
+    if (
+      interaction.commandName === "resolve"
+    ) {
 
       const marketId =
-        interaction.options.getString("marketid");
+        interaction.options.getString(
+          "marketid"
+        );
 
       const winnerNumber =
-        interaction.options.getInteger("winner");
+        interaction.options.getInteger(
+          "winner"
+        );
 
-      // Discord uses 1-5 for the winning option.
-      // Internally Prophixy stores options as 0-4.
-      const winnerOption = winnerNumber - 1;
+      const winnerOption =
+        winnerNumber - 1;
+
 
       if (
         winnerNumber < 1 ||
         winnerNumber > 5
       ) {
+
         return interaction.reply({
           content:
             "❌ Winner must be between **1 and 5**.",
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
+
       }
 
+
       await interaction.deferReply({
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
+
 
       try {
 
@@ -967,6 +772,7 @@ ${user.sbt?.role || "Not Verified"}`
             marketId,
             winnerOption
           );
+
 
         if (!result.success) {
 
@@ -977,16 +783,17 @@ ${user.sbt?.role || "Not Verified"}`
 
         }
 
+
         return interaction.editReply({
           content:
-            `✅ **Market resolved successfully!**\\n\\n` +
-            `🆔 Market: **${marketId}**\\n` +
-            `🏆 Winning option: **${winnerNumber}**\\n\\n` +
-            `🏦 Total pool: **${Number(result.totalPool || 0).toLocaleString()} PHX**\\n` +
-            `👤 Creator reward (3%): **${Number(result.creatorReward || 0).toLocaleString()} PHX**\\n` +
-            `🏆 Winner pool (93%): **${Number(result.winnerPool || 0).toLocaleString()} PHX**\\n` +
-            `🏦 Reserve (4%): **${Number(result.reserveAmount || 0).toLocaleString()} PHX**\\n\\n` +
-            `👥 Winners: **${result.winners}**\\n` +
+            `✅ **Market resolved successfully!**\n\n` +
+            `🆔 Market: **${marketId}**\n` +
+            `🏆 Winning option: **${winnerNumber}**\n\n` +
+            `🏦 Total pool: **${Number(result.totalPool || 0).toLocaleString()} PHX**\n` +
+            `👤 Creator reward (3%): **${Number(result.creatorReward || 0).toLocaleString()} PHX**\n` +
+            `🏆 Winner pool (93%): **${Number(result.winnerPool || 0).toLocaleString()} PHX**\n` +
+            `🏦 Reserve (4%): **${Number(result.reserveAmount || 0).toLocaleString()} PHX**\n\n` +
+            `👥 Winners: **${result.winners}**\n` +
             `💰 Distributed to winners: **${Number(result.distributedToWinners || 0).toLocaleString()} PHX**`
         });
 
@@ -999,163 +806,187 @@ ${user.sbt?.role || "Not Verified"}`
 
         return interaction.editReply({
           content:
-            `❌ Unable to resolve market.\\n\\nReason: ${error.message}`
+            `❌ Unable to resolve market.\n\nReason: ${error.message}`
         });
 
       }
+
     }
+
 
     // =====================================================
     // CREATE EVENT
     // =====================================================
-    if (interaction.commandName === "event-create") {
+
+    if (
+      interaction.commandName === "event-create"
+    ) {
 
       const category =
-        interaction.options.getString("category");
+        interaction.options.getString(
+          "category"
+        );
 
       const question =
-        interaction.options.getString("question");
+        interaction.options.getString(
+          "question"
+        );
 
       const options = [
-
         interaction.options.getString("option1"),
-
         interaction.options.getString("option2"),
-
         interaction.options.getString("option3"),
-
         interaction.options.getString("option4"),
-
-        interaction.options.getString("option5"),
-
+        interaction.options.getString("option5")
       ].filter(Boolean);
 
 
       const duration =
-interaction.options.getString("duration");
-
-const match = duration.match(/^(\d+)(m|h|d|w)$/i);
-
-if (!match) {
-
-  return interaction.reply({
-    content:
-      "❌ Invalid duration.\nExamples: `30m`, `2h`, `3d`, `1w`"
-  });
-
-}
-
-const amount = Number(match[1]);
-
-const unit = match[2].toLowerCase();
-
-let milliseconds = 0;
-
-switch (unit) {
-
-  case "m":
-    milliseconds = amount * 60 * 1000;
-    break;
-
-  case "h":
-    milliseconds = amount * 60 * 60 * 1000;
-    break;
-
-  case "d":
-    milliseconds = amount * 24 * 60 * 60 * 1000;
-    break;
-
-  case "w":
-    milliseconds = amount * 7 * 24 * 60 * 60 * 1000;
-    break;
-
-}
-
-      const event = await createEvent(
-  category,
-  question,
-  options,
-  Date.now() + milliseconds,
-  interaction.user.id
-);
-
-const embed = new EmbedBuilder()
-  .setColor(0x0099FF)
-
-  .setTitle("📊 New Prediction Market")
-
-  .setDescription(question)
-
-  .addFields(
-
-    {
-      name: "📂 Category",
-      value: category,
-      inline: true
-    },
-
-    {
-      name: "🏦 Market Pool",
-      value: "0 PHX",
-      inline: true
-    },
-
-    {
-      name: "👥 Participants",
-      value: "0",
-      inline: true
-    },
-
-    {
-      name: "⏳ Duration",
-      value: duration,
-      inline: true
-    },
-
-    {
-      name: "📌 Status",
-      value: "🟢 Active",
-      inline: true
-    },
-
-    {
-      name: "🆔 Market ID",
-      value: event.id,
-      inline: true
-    }
-
-  )
-
-  .setFooter({
-    text: "One prediction per user • Results are based on real-world outcomes"
-  })
-
-  .setTimestamp();
-
-      const row = new ActionRowBuilder();
-
-      options.forEach((option, index) => {
-
-        row.addComponents(
-
-          new ButtonBuilder()
-
-            .setCustomId(`vote_${event.id}_${index}`)
-
-            .setLabel(option)
-
-            .setStyle(ButtonStyle.Primary)
-
+        interaction.options.getString(
+          "duration"
         );
 
-      });
+
+      const match =
+        duration.match(
+          /^(\d+)(m|h|d|w)$/i
+        );
+
+
+      if (!match) {
+
+        return interaction.reply({
+          content:
+            "❌ Invalid duration.\nExamples: `30m`, `2h`, `3d`, `1w`"
+        });
+
+      }
+
+
+      const amount =
+        Number(match[1]);
+
+      const unit =
+        match[2].toLowerCase();
+
+      let milliseconds = 0;
+
+
+      switch (unit) {
+
+        case "m":
+          milliseconds =
+            amount * 60 * 1000;
+          break;
+
+        case "h":
+          milliseconds =
+            amount * 60 * 60 * 1000;
+          break;
+
+        case "d":
+          milliseconds =
+            amount * 24 * 60 * 60 * 1000;
+          break;
+
+        case "w":
+          milliseconds =
+            amount * 7 * 24 * 60 * 60 * 1000;
+          break;
+
+      }
+
+
+      const event =
+        await createEvent(
+          category,
+          question,
+          options,
+          Date.now() + milliseconds,
+          interaction.user.id
+        );
+
+
+      const embed =
+        new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle(
+            "📊 New Prediction Market"
+    )
+          .setDescription(
+            question
+          )
+          .addFields(
+
+            {
+              name: "📂 Category",
+              value: category,
+              inline: true
+            },
+
+            {
+              name: "🏦 Market Pool",
+              value: "0 PHX",
+              inline: true
+            },
+
+            {
+              name: "👥 Participants",
+              value: "0",
+              inline: true
+            },
+
+            {
+              name: "⏳ Duration",
+              value: duration,
+              inline: true
+            },
+
+            {
+              name: "📌 Status",
+              value: "🟢 Active",
+              inline: true
+            },
+
+            {
+              name: "🆔 Market ID",
+              value: event.id,
+              inline: true
+            }
+
+          )
+          .setFooter({
+            text:
+              "One prediction per user • Results are based on real-world outcomes"
+          })
+          .setTimestamp();
+
+
+      const row =
+        new ActionRowBuilder();
+
+
+      options.forEach(
+        (option, index) => {
+
+          row.addComponents(
+            new ButtonBuilder()
+              .setCustomId(
+                `vote_${event.id}_${index}`
+              )
+              .setLabel(option)
+              .setStyle(
+                ButtonStyle.Primary
+              )
+          );
+
+        }
+      );
+
 
       await interaction.reply({
-
         embeds: [embed],
-
         components: [row]
-
       });
 
       return;
@@ -1163,16 +994,22 @@ const embed = new EmbedBuilder()
 
   } catch (err) {
 
-    console.error(err);
+    console.error(
+      "Interaction error:",
+      err
+    );
 
-    if (!interaction.replied && !interaction.deferred) {
+    if (
+      !interaction.replied &&
+      !interaction.deferred
+    ) {
 
       try {
 
         await interaction.reply({
-
-          content: "❌ Something went wrong."
-
+          content:
+            "❌ Something went wrong.",
+          flags: MessageFlags.Ephemeral
         });
 
       } catch {}

@@ -1,4 +1,22 @@
-const { db, save } = require("../services/database");
+const {
+  db,
+  save,
+  getUser,
+  updateUser
+} = require("../services/database");
+
+const {
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder
+} = require("discord.js");
+
+const MIN_STAKE = 100;
+
+// ==========================================
+// VOTE BUTTON → OPEN STAKE MODAL
+// ==========================================
 
 async function handleVote(interaction) {
 
@@ -6,78 +24,304 @@ async function handleVote(interaction) {
 
   await db.read();
 
-  const [, eventId, optionIndex] = interaction.customId.split("_");
+  const [, eventId, optionIndex] =
+    interaction.customId.split("_");
 
   const event = db.data.events.find(
     e => e.id === eventId
   );
 
   if (!event) {
-
     return interaction.reply({
-      content: "❌ Prediction event not found.",
+      content: "❌ Prediction market not found.",
       ephemeral: true
     });
-
   }
 
   if (event.status !== "active") {
-
     return interaction.reply({
-      content: "❌ This prediction has already ended.",
+      content:
+        "❌ This prediction market has already ended.",
       ephemeral: true
     });
-
   }
 
-  const alreadyPredicted = db.data.predictions.find(
-    prediction =>
-      prediction.eventId === eventId &&
-      prediction.discordId === interaction.user.id
-  );
+  if (
+    event.endsAt &&
+    Date.now() >= event.endsAt
+  ) {
+    return interaction.reply({
+      content:
+        "❌ This prediction market has ended.",
+      ephemeral: true
+    });
+  }
+
+  const selectedOption = Number(optionIndex);
+
+  if (
+    Number.isNaN(selectedOption) ||
+    !event.options[selectedOption]
+  ) {
+    return interaction.reply({
+      content: "❌ Invalid prediction option.",
+      ephemeral: true
+    });
+  }
+
+  // Prevent multiple predictions
+  const alreadyPredicted =
+    db.data.predictions.find(
+      prediction =>
+        prediction.eventId === eventId &&
+        prediction.discordId === interaction.user.id
+    );
 
   if (alreadyPredicted) {
-
     return interaction.reply({
-      content: "❌ You have already submitted a prediction for this market.",
+      content:
+        "❌ You have already submitted a prediction for this market.",
       ephemeral: true
     });
-
   }
+
+  // ==========================================
+  // OPEN STAKE MODAL
+  // ==========================================
+
+  const modal = new ModalBuilder()
+    .setCustomId(
+      `stake_${eventId}_${selectedOption}`
+    )
+    .setTitle("Enter your PHX stake");
+
+  const stakeInput = new TextInputBuilder()
+    .setCustomId("stake_amount")
+    .setLabel("How much PHX do you want to stake?")
+    .setPlaceholder("Minimum: 100 PHX")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(15);
+
+  const row = new ActionRowBuilder()
+    .addComponents(stakeInput);
+
+  modal.addComponents(row);
+
+  await interaction.showModal(modal);
+}
+
+
+// ==========================================
+// STAKE MODAL SUBMISSION
+// ==========================================
+
+async function handleStakeSubmit(interaction) {
+
+  if (!interaction.customId.startsWith("stake_")) {
+    return;
+  }
+
+  await db.read();
+
+  const [, eventId, optionIndex] =
+    interaction.customId.split("_");
+
+  const event = db.data.events.find(
+    e => e.id === eventId
+  );
+
+  if (!event) {
+    return interaction.reply({
+      content:
+        "❌ Prediction market not found.",
+      ephemeral: true
+    });
+  }
+
+  if (event.status !== "active") {
+    return interaction.reply({
+      content:
+        "❌ This prediction market has already ended.",
+      ephemeral: true
+    });
+  }
+
+  if (
+    event.endsAt &&
+    Date.now() >= event.endsAt
+  ) {
+    return interaction.reply({
+      content:
+        "❌ This prediction market has ended.",
+      ephemeral: true
+    });
+  }
+
+  // ==========================================
+  // PREVENT MULTIPLE PREDICTIONS
+  // ==========================================
+
+  const alreadyPredicted =
+    db.data.predictions.find(
+      prediction =>
+        prediction.eventId === eventId &&
+        prediction.discordId === interaction.user.id
+    );
+
+  if (alreadyPredicted) {
+    return interaction.reply({
+      content:
+        "❌ You have already submitted a prediction for this market.",
+      ephemeral: true
+    });
+  }
+
+  // ==========================================
+  // READ STAKE
+  // ==========================================
+
+  const rawStake =
+    interaction.fields
+      .getTextInputValue("stake_amount")
+      .trim();
+
+  const stake = Number(rawStake);
+
+  if (
+    !Number.isFinite(stake) ||
+    !Number.isInteger(stake) ||
+    stake < MIN_STAKE
+  ) {
+    return interaction.reply({
+      content:
+        `❌ Invalid stake.\n\n` +
+        `Minimum stake: **${MIN_STAKE.toLocaleString()} PHX**`,
+      ephemeral: true
+    });
+  }
+
+  // ==========================================
+  // GET USER
+  // ==========================================
+
+  const user =
+    await getUser(interaction.user.id);
+
+  if (!user) {
+    return interaction.reply({
+      content:
+        "❌ You don't have a Prophixy account yet.",
+      ephemeral: true
+    });
+  }
+
+  if (user.phx === undefined) {
+    user.phx = 0;
+  }
+
+  // ==========================================
+  // CHECK BALANCE
+  // ==========================================
+
+  if (user.phx < stake) {
+    return interaction.reply({
+      content:
+        `❌ Insufficient PHX.\n\n` +
+        `💰 Your stake: **${stake.toLocaleString()} PHX**\n` +
+        `💳 Your balance: **${user.phx.toLocaleString()} PHX**`,
+      ephemeral: true
+    });
+  }
+
+  const selectedOption = Number(optionIndex);
+
+  if (
+    Number.isNaN(selectedOption) ||
+    !event.options[selectedOption]
+  ) {
+    return interaction.reply({
+      content:
+        "❌ Invalid prediction option.",
+      ephemeral: true
+    });
+  }
+
+  // ==========================================
+  // DEDUCT STAKE
+  // ==========================================
+
+  user.phx -= stake;
+
+  // ==========================================
+  // ADD TO MARKET POOL
+  // ==========================================
+
+  event.pool =
+    Number(event.pool || 0) + stake;
+
+  event.participants =
+    Number(event.participants || 0) + 1;
+
+  // ==========================================
+  // RECORD PREDICTION
+  // ==========================================
 
   db.data.predictions.push({
 
     eventId,
 
-    discordId: interaction.user.id,
+    discordId:
+      interaction.user.id,
 
-    option: Number(optionIndex),
+    option:
+      selectedOption,
 
-    timestamp: Date.now()
+    stake,
+
+    timestamp:
+      Date.now()
 
   });
 
-  event.participants++;
+  await updateUser(user);
 
   await save();
+
+  // ==========================================
+  // CONFIRMATION
+  // ==========================================
 
   await interaction.reply({
 
     content:
-`✅ Prediction submitted successfully!
+      `✅ **Prediction submitted successfully!**\n\n` +
 
-Your prediction:
+      `📊 Market:\n` +
+      `**${event.question}**\n\n` +
 
-**${event.options[optionIndex]}**
+      `🔮 Prediction:\n` +
+      `**${event.options[selectedOption]}**\n\n` +
 
-This prediction cannot be changed.`,
+      `💰 Stake:\n` +
+      `**${stake.toLocaleString()} PHX**\n\n` +
+
+      `🏦 Market pool:\n` +
+      `**${event.pool.toLocaleString()} PHX**\n\n` +
+
+      `💳 Remaining balance:\n` +
+      `**${user.phx.toLocaleString()} PHX**\n\n` +
+
+      `⚠️ Your prediction cannot be changed.`,
 
     ephemeral: true
 
   });
-
 }
 
+
 module.exports = {
-  handleVote
+  handleVote,
+  handleStakeSubmit
 };
