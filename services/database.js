@@ -8,6 +8,7 @@ const defaultData = {
   events: [],
   predictions: [],
   invites: [],
+  inviteLinks: [],
   leaderboard: [],
   transactions: []
 };
@@ -32,6 +33,7 @@ async function initDB() {
   db.data.events ||= [];
   db.data.predictions ||= [];
   db.data.invites ||= [];
+  db.data.inviteLinks ||= [];
   db.data.leaderboard ||= [];
   db.data.transactions ||= [];
 

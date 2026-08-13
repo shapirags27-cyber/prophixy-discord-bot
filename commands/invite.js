@@ -2,6 +2,8 @@ const {
   SlashCommandBuilder
 } = require("discord.js");
 
+const { db } = require("../services/database");
+
 module.exports = {
 
   data: new SlashCommandBuilder()
@@ -41,12 +43,35 @@ module.exports = {
 
       const invite =
         await channel.createInvite({
-          maxAge: 0,
+          maxAge: 7 * 24 * 60 * 60,
           maxUses: 0,
           unique: true,
           reason:
-            `Prophixy invite created by ${interaction.user.tag}`
+            `Prophixy invite requested by ${interaction.user.tag}`
         });
+
+      // Remember which Prophixy user owns this invite link.
+      // Discord sees the bot as the technical invite creator,
+      // so we keep our own owner mapping.
+      await db.read();
+
+      db.data.inviteLinks ||= [];
+
+      db.data.inviteLinks.push({
+        code: invite.code,
+        inviterId: interaction.user.id,
+        inviterUsername: interaction.user.username,
+        createdAt: new Date().toISOString(),
+        expiresAt: invite.expiresAt
+          ? invite.expiresAt.toISOString()
+          : null
+      });
+
+      await db.write();
+
+      console.log(
+        `🔗 Invite ${invite.code} linked to ${interaction.user.username} (${interaction.user.id})`
+      );
 
       await interaction.reply({
         content:

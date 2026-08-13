@@ -107,13 +107,35 @@ client.on(Events.GuildMemberAdd, async (member) => {
       return;
     }
 
-    const inviterId =
-      usedInvite.inviterId;
+    // Discord reports the bot as the technical creator of
+    // these invites. Use our saved Prophixy invite ownership
+    // mapping to identify the actual person who shared it.
+    let inviterId = null;
 
-    if (!inviterId) {
+    await require("./services/database").db.read();
+
+    const inviteLink =
+      require("./services/database").db.data.inviteLinks?.find(
+        link =>
+          link.code === usedInvite.code
+      );
+
+    if (inviteLink) {
+      inviterId = inviteLink.inviterId;
 
       console.log(
-        `ℹ️ Invite ${usedInvite.code} has no identifiable inviter.`
+        `🔗 Prophixy invite ${usedInvite.code} belongs to ${inviteLink.inviterUsername} (${inviterId})`
+      );
+    } else {
+      // Fallback for invites that were not generated through
+      // the Prophixy invite system.
+      inviterId = usedInvite.inviterId;
+    }
+
+    if (!inviterId || inviterId === client.user.id) {
+
+      console.log(
+        `ℹ️ Could not identify a Prophixy inviter for ${member.user.tag}`
       );
 
       return;
