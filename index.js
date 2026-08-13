@@ -35,6 +35,12 @@ const {
   getUserRank
 } = require("./services/leaderboard");
 
+const {
+  cacheGuildInvites,
+  findUsedInvite,
+  recordInvite
+} = require("./services/invites");
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -50,8 +56,111 @@ require("./api")(client);
 client.once(Events.ClientReady, async () => {
   await initDB();
 
+  // Cache current Discord invites so we can detect
+  // exactly which invite is used when someone joins.
+  for (const guild of client.guilds.cache.values()) {
+    guild.inviteCache = await cacheGuildInvites(guild);
+
+    console.log(
+      `📨 Cached ${Object.keys(guild.inviteCache).length} invites for ${guild.name}`
+    );
+  }
+
   console.log(`✅ Logged in as ${client.user.tag}`);
   console.log("🚀 Prophixy Beta is online!");
+});
+
+// =====================================================
+// INVITE TRACKING
+// =====================================================
+
+client.on(Events.GuildMemberAdd, async (member) => {
+
+  try {
+
+    const guild = member.guild;
+
+    // Get the previous invite cache.
+    const oldInvites =
+      guild.inviteCache || {};
+
+    // Fetch the current invite usage.
+    const newInvites =
+      await cacheGuildInvites(guild);
+
+    // Update cache immediately.
+    guild.inviteCache = newInvites;
+
+    // Determine which invite was used.
+    const usedInvite =
+      findUsedInvite(
+        oldInvites,
+        newInvites
+      );
+
+    if (!usedInvite) {
+
+      console.log(
+        `ℹ️ Could not determine inviter for ${member.user.tag}`
+      );
+
+      return;
+    }
+
+    const inviterId =
+      usedInvite.inviterId;
+
+    if (!inviterId) {
+
+      console.log(
+        `ℹ️ Invite ${usedInvite.code} has no identifiable inviter.`
+      );
+
+      return;
+    }
+
+    // Record the successful invite.
+    const record =
+      await recordInvite(
+        inviterId,
+        member.id,
+        member.user.username
+      );
+
+    if (!record) {
+      return;
+    }
+
+    // Find a suitable invite channel.
+   const inviteChannel =
+  guild.channels.cache.get(
+    process.env.INVITE_CHANNEL_ID
+  );
+
+    if (inviteChannel) {
+
+      await inviteChannel.send(
+        `🎉 **New Prophixy Invite!**\n\n` +
+        `👤 **${member.user.username}** was invited by <@${inviterId}>.\n` +
+        `🎁 <@${inviterId}> earned **+10 PHX**.\n`+
+        `👥 Their invite count has increased by **1**.`
+      );
+
+    }
+
+    console.log(
+      `🎉 ${member.user.username} was invited by ${inviterId}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Invite tracking error:",
+      error
+    );
+
+  }
+
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
