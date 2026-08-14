@@ -19,6 +19,25 @@ async function getLeaderboard(limit = 10) {
 }
 
 // ==============================
+// GET INVITE LEADERBOARD
+// ==============================
+
+async function getInviteLeaderboard(limit = 10) {
+  await db.read();
+
+  const users = db.data.users || [];
+
+  return users
+    .filter(user => Number(user.invites || 0) > 0)
+    .slice()
+    .sort(
+      (a, b) =>
+        Number(b.invites || 0) - Number(a.invites || 0)
+    )
+    .slice(0, limit);
+}
+
+// ==============================
 // GET USER PHX RANK
 // ==============================
 
@@ -49,5 +68,6 @@ async function getUserRank(discordId) {
 
 module.exports = {
   getLeaderboard,
+  getInviteLeaderboard,
   getUserRank
 };
