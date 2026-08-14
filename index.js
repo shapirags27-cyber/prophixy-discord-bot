@@ -1236,15 +1236,34 @@ async function handleGenerateInvite(interaction) {
 
     if (dbUser) {
 
-      dbUser.inviteCode = invite.code;
-
-      dbUser.inviteCreatedAt =
+      const createdAt =
         new Date().toISOString();
 
-      dbUser.inviteExpiresAt =
+      const expiresAt =
         new Date(
           Date.now() + 7 * 24 * 60 * 60 * 1000
         ).toISOString();
+
+      dbUser.inviteCode = invite.code;
+
+      dbUser.inviteCreatedAt =
+        createdAt;
+
+      dbUser.inviteExpiresAt =
+        expiresAt;
+
+      // Save the exact Prophixy owner of this invite.
+      // Discord may report the bot as the technical
+      // inviter, so this mapping identifies the real user.
+      db.data.inviteLinks ||= [];
+
+      db.data.inviteLinks.push({
+        code: invite.code,
+        inviterId: userId,
+        inviterUsername: interaction.user.username,
+        createdAt,
+        expiresAt
+      });
 
       await db.write();
     }
