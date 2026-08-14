@@ -31,6 +31,13 @@ async function handleVote(interaction) {
     e => e.id === eventId
   );
 
+  console.log(
+    "🎯 EVENT CHECK:",
+    event ? event.id : "NOT FOUND",
+    event?.status,
+    event?.endsAt
+  );
+
   if (!event) {
     return interaction.reply({
       content: "❌ Prediction market not found.",
@@ -203,7 +210,17 @@ async function handleStakeSubmit(interaction) {
       .getTextInputValue("stake_amount")
       .trim();
 
+  console.log(
+    "🎯 STAKE INPUT:",
+    rawStake
+  );
+
   const stake = Number(rawStake);
+
+  console.log(
+    "🎯 STAKE NUMBER:",
+    stake
+  );
 
   if (
     !Number.isFinite(stake) ||
@@ -224,6 +241,18 @@ async function handleStakeSubmit(interaction) {
 
   const user =
     await getUser(interaction.user.id);
+
+  console.log(
+    "🎯 USER CHECK:",
+    user
+      ? {
+          discordId: user.discordId,
+          phx: user.phx,
+          wallet: user.wallet,
+          sbtRole: user.sbt?.role
+        }
+      : "USER NOT FOUND"
+  );
 
   if (!user) {
     return interaction.reply({
@@ -264,11 +293,22 @@ async function handleStakeSubmit(interaction) {
     });
   }
 
+  console.log(
+    "🎯 BALANCE CHECK PASSED:",
+    "balance=", user.phx,
+    "stake=", stake
+  );
+
   // ==========================================
   // DEDUCT STAKE
   // ==========================================
 
   user.phx -= stake;
+
+  console.log(
+    "🎯 PHX DEDUCTED:",
+    user.phx
+  );
 
   // ==========================================
   // ADD TO MARKET POOL
