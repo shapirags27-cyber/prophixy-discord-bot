@@ -12,6 +12,9 @@ module.exports = {
   DAILY_CHECKIN: 3,
   INVITE: 10,
 
+  // Market Creation
+  MARKET_CREATION_FEE: 50,
+
   // SBT Rewards
   TOP_FORECASTER_SBT: 20000,
   MARKET_CREATOR_SBT: 15000

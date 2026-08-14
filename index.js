@@ -25,6 +25,10 @@ const {
 
 const { verifySBT } = require("./services/sbt");
 
+const {
+  MARKET_CREATION_FEE
+} = require("./config/rewards");
+
 const { assignSbtRole } = require("./services/roles");
 
 const { createEvent } = require("./events/createEvent");
@@ -1482,6 +1486,63 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.commandName === "event-create"
     ) {
 
+      // =====================================================
+      // ACKNOWLEDGE INTERACTION IMMEDIATELY
+      // =====================================================
+
+      await interaction.deferReply();
+
+      // =====================================================
+      // MARKET CREATOR ROLE CHECK
+      // =====================================================
+
+      const creatorUser =
+        await getUser(interaction.user.id);
+
+      const creatorRole =
+        creatorUser?.sbt?.role || "none";
+
+      const allowedCreatorRoles = [
+        "Top Forecaster",
+        "Market Creator"
+      ];
+
+      if (!allowedCreatorRoles.includes(creatorRole)) {
+
+        return interaction.editReply({
+          content:
+            "❌ **You cannot create markets.**\\n\\n" +
+            "Only users with the **Top Forecaster** or **Market Creator** SBT role can create prediction markets.\\n\\n" +
+            "👤 Everyone else can participate in existing markets.",
+          flags: MessageFlags.Ephemeral
+        });
+
+      }
+
+      // =====================================================
+      // MARKET CREATION FEE
+      // =====================================================
+
+      const creatorBalance =
+        Number(creatorUser?.phx || 0);
+
+      if (creatorBalance < MARKET_CREATION_FEE) {
+
+        return interaction.editReply({
+          content:
+            "❌ **Insufficient PHX to create a market.**\\n\\n" +
+            `💰 Market creation fee: **${MARKET_CREATION_FEE.toLocaleString()} PHX**\\n` +
+            `💳 Your balance: **${creatorBalance.toLocaleString()} PHX**\\n\\n` +
+            "You need enough PHX to pay the market creation fee.",
+          flags: MessageFlags.Ephemeral
+        });
+
+      }
+
+      // =====================================================
+      // MARKET DETAILS
+      // =====================================================
+
       const category =
         interaction.options.getString(
           "category"
@@ -1515,7 +1576,7 @@ ${user.sbt?.role || "Not Verified"}`
 
       if (!match) {
 
-        return interaction.reply({
+        return interaction.editReply({
           content:
             "❌ Invalid duration.\nExamples: `30m`, `2h`, `3d`, `1w`"
         });
@@ -1559,12 +1620,26 @@ ${user.sbt?.role || "Not Verified"}`
 
       const event =
         await createEvent(
-          category,
-          question,
-          options,
-          Date.now() + milliseconds,
-          interaction.user.id
-        );
+            category,
+            question,
+            options,
+            Date.now() + milliseconds,
+            interaction.user.id
+          );
+
+
+      // =====================================================
+      // CHARGE MARKET CREATION FEE
+      // =====================================================
+
+      creatorUser.phx =
+        creatorBalance - MARKET_CREATION_FEE;
+
+      await save();
+
+      console.log(
+        `💰 Charged ${MARKET_CREATION_FEE} PHX market creation fee from ${interaction.user.tag}`
+      );
 
 
       const embed =
