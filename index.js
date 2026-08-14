@@ -984,6 +984,407 @@ ${user.sbt?.role || "Not Verified"}`
 
 
     // =====================================================
+    // ADMIN ROLE STATISTICS
+    // =====================================================
+
+    if (
+      interaction.commandName === "role-stats"
+    ) {
+
+      if (
+        !interaction.member ||
+        !interaction.member.permissions.has(
+          PermissionFlagsBits.Administrator
+        )
+      ) {
+        return interaction.reply({
+          content:
+            "❌ You don't have permission to use this command.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+
+        const guild = interaction.guild;
+
+        if (!guild) {
+          return interaction.editReply({
+            content:
+              "❌ This command can only be used inside the Prophixy server."
+          });
+        }
+
+        await guild.members.fetch();
+
+        const roles = guild.roles.cache
+          .filter(role => role.id !== guild.id)
+          .sort(
+            (a, b) =>
+              b.members.size - a.members.size
+          );
+
+        const lines = roles.map(
+          (role, index) =>
+            `**${index + 1}.** ${role} — **${role.members.size} members**`
+        );
+
+        const embed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(
+              "📊 Prophixy Discord Role Statistics"
+            )
+            .setDescription(
+              lines.length
+                ? lines.join("\n")
+                : "No Discord roles found."
+            )
+            .setFooter({
+              text:
+                `Total server members: ${guild.memberCount} • ${roles.size} roles tracked`
+            })
+            .setTimestamp();
+
+        await interaction.editReply({
+          embeds: [embed]
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ Role statistics error:",
+          error
+        );
+
+        await interaction.editReply({
+          content:
+            "❌ Unable to load Discord role statistics."
+        }).catch(() => {});
+      }
+
+      return;
+    }
+
+
+    // =====================================================
+    // ADMIN PROFILE
+    // =====================================================
+
+    if (
+      interaction.commandName === "admin-profile"
+    ) {
+
+      if (
+        !interaction.member ||
+        !interaction.member.permissions.has(
+          PermissionFlagsBits.Administrator
+        )
+      ) {
+        return interaction.reply({
+          content:
+            "❌ You don't have permission to use this command.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      const target =
+        interaction.options.getUser("user");
+
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+
+        const user =
+          await getUser(target.id);
+
+        if (!user) {
+          return interaction.editReply({
+            content:
+              `❌ <@${target.id}> does not have a Prophixy account yet.`
+          });
+        }
+
+        const embed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle("👤 Prophixy Admin Profile")
+            .setThumbnail(target.displayAvatarURL())
+            .addFields(
+              {
+                name: "Discord",
+                value: `<@${target.id}>`,
+                inline: true
+              },
+              {
+                name: "PHX",
+                value: `**${Number(user.phx || 0).toLocaleString()}**`,
+                inline: true
+              },
+              {
+                name: "Invites",
+                value: `**${Number(user.invites || 0)}**`,
+                inline: true
+              },
+              {
+                name: "Wins",
+                value: `**${Number(user.wins || 0)}**`,
+                inline: true
+              },
+              {
+                name: "Losses",
+                value: `**${Number(user.losses || 0)}**`,
+                inline: true
+              },
+              {
+                name: "Predictions",
+                value: `**${Number(user.totalPredictions || 0)}**`,
+                inline: true
+              },
+              {
+                name: "Accuracy",
+                value: `**${Number(user.accuracy || 0)}%**`,
+                inline: true
+              },
+              {
+                name: "Streak",
+                value: `**${Number(user.streak || 0)}**`,
+                inline: true
+              },
+              {
+                name: "Best Streak",
+                value: `**${Number(user.bestStreak || 0)}**`,
+                inline: true
+              },
+              {
+                name: "SBT Role",
+                value: user.sbt?.role || "none",
+                inline: true
+              },
+              {
+                name: "Wallet",
+                value:
+                  user.wallet ||
+                  user.walletAddress ||
+                  "Not connected",
+                inline: false
+              }
+            )
+            .setFooter({
+              text: "Prophixy • Admin View"
+            })
+            .setTimestamp();
+
+        return interaction.editReply({
+          embeds: [embed]
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ Admin profile error:",
+          error
+        );
+
+        return interaction.editReply({
+          content:
+            "❌ Unable to load that member's profile."
+        }).catch(() => {});
+      }
+    }
+
+
+    // =====================================================
+    // ADMIN ADD PHX
+    // =====================================================
+
+    if (
+      interaction.commandName === "add-phx"
+    ) {
+
+      if (
+        !interaction.member ||
+        !interaction.member.permissions.has(
+          PermissionFlagsBits.Administrator
+        )
+      ) {
+        return interaction.reply({
+          content:
+            "❌ You don't have permission to use this command.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      const target =
+        interaction.options.getUser("user");
+
+      const amount =
+        interaction.options.getInteger("amount");
+
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+
+        let user =
+          await getUser(target.id);
+
+        if (!user) {
+          user =
+            await createUser(
+              target.id,
+              target.username
+            );
+        }
+
+        const { db } =
+          require("./services/database");
+
+        await db.read();
+
+        const dbUser =
+          db.data.users.find(
+            u => u.discordId === target.id
+          );
+
+        if (!dbUser) {
+          return interaction.editReply({
+            content:
+              "❌ Could not find the member in the database."
+          });
+        }
+
+        dbUser.phx =
+          Number(dbUser.phx || 0) + amount;
+
+        await db.write();
+
+        return interaction.editReply({
+          content:
+            `✅ Added **${amount.toLocaleString()} PHX** to <@${target.id}>.\n\n` +
+            `💰 New balance: **${Number(dbUser.phx).toLocaleString()} PHX**`
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ Add PHX error:",
+          error
+        );
+
+        return interaction.editReply({
+          content:
+            "❌ Unable to add PHX."
+        }).catch(() => {});
+      }
+    }
+
+
+    // =====================================================
+    // ADMIN REMOVE PHX
+    // =====================================================
+
+    if (
+      interaction.commandName === "remove-phx"
+    ) {
+
+      if (
+        !interaction.member ||
+        !interaction.member.permissions.has(
+          PermissionFlagsBits.Administrator
+        )
+      ) {
+        return interaction.reply({
+          content:
+            "❌ You don't have permission to use this command.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      const target =
+        interaction.options.getUser("user");
+
+      const amount =
+        interaction.options.getInteger("amount");
+
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+
+        const user =
+          await getUser(target.id);
+
+        if (!user) {
+          return interaction.editReply({
+            content:
+              `❌ <@${target.id}> does not have a Prophixy account yet.`
+          });
+        }
+
+        const { db } =
+          require("./services/database");
+
+        await db.read();
+
+        const dbUser =
+          db.data.users.find(
+            u => u.discordId === target.id
+          );
+
+        if (!dbUser) {
+          return interaction.editReply({
+            content:
+              "❌ Could not find the member in the database."
+          });
+        }
+
+        const currentBalance =
+          Number(dbUser.phx || 0);
+
+        if (amount > currentBalance) {
+          return interaction.editReply({
+            content:
+              `❌ Cannot remove **${amount.toLocaleString()} PHX**.\n\n` +
+              `💰 Current balance: **${currentBalance.toLocaleString()} PHX**`
+          });
+        }
+
+        dbUser.phx =
+          currentBalance - amount;
+
+        await db.write();
+
+        return interaction.editReply({
+          content:
+            `✅ Removed **${amount.toLocaleString()} PHX** from <@${target.id}>.\n\n` +
+            `💰 New balance: **${Number(dbUser.phx).toLocaleString()} PHX**`
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ Remove PHX error:",
+          error
+        );
+
+        return interaction.editReply({
+          content:
+            "❌ Unable to remove PHX."
+        }).catch(() => {});
+      }
+    }
+
+
+    // =====================================================
     // RESOLVE MARKET
     // =====================================================
 

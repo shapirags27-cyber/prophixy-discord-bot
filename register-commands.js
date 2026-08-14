@@ -36,6 +36,66 @@ const commands = [
   // ===========================
 
   // ===========================
+  // ADMIN ROLE STATISTICS
+  // ===========================
+  new SlashCommandBuilder()
+    .setName("role-stats")
+    .setDescription("View how many Discord members have each role"),
+
+  // ===========================
+  // ADMIN PROFILE
+  // ===========================
+  new SlashCommandBuilder()
+    .setName("admin-profile")
+    .setDescription("View a member's Prophixy profile")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("Discord member to inspect")
+        .setRequired(true)
+    ),
+
+  // ===========================
+  // ADMIN ADD PHX
+  // ===========================
+  new SlashCommandBuilder()
+    .setName("add-phx")
+    .setDescription("Add PHX to a member")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("Discord member")
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("amount")
+        .setDescription("Amount of PHX to add")
+        .setRequired(true)
+        .setMinValue(1)
+    ),
+
+  // ===========================
+  // ADMIN REMOVE PHX
+  // ===========================
+  new SlashCommandBuilder()
+    .setName("remove-phx")
+    .setDescription("Remove PHX from a member")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("Discord member")
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("amount")
+        .setDescription("Amount of PHX to remove")
+        .setRequired(true)
+        .setMinValue(1)
+    ),
+
+  // ===========================
   // CREATE MARKET
   // ===========================
   new SlashCommandBuilder()
