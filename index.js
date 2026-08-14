@@ -271,7 +271,9 @@ ${user.sbt?.role || "Not Verified"}`
 
       if (interaction.customId === "prophixy_leaderboard") {
 
-        await interaction.deferReply();
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral
+        });
 
         try {
 
@@ -343,7 +345,9 @@ ${user.sbt?.role || "Not Verified"}`
 
       if (interaction.customId === "prophixy_invite_leaderboard") {
 
-        await interaction.deferReply();
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral
+        });
 
         try {
 
