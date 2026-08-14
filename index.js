@@ -621,6 +621,29 @@ ${user.sbt?.role || "Not Verified"}`
 
 
     // =====================================================
+    // STAKE MODAL SUBMISSION
+    // =====================================================
+
+    console.log(
+      "🧪 INTERACTION TYPE CHECK:",
+      "isModalSubmit=",
+      interaction.isModalSubmit(),
+      "customId=",
+      interaction.customId || "NONE"
+    );
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId.startsWith("stake_")
+    ) {
+
+      await handleStakeSubmit(interaction);
+
+      return;
+    }
+
+
+    // =====================================================
     // SLASH COMMANDS ONLY
     // =====================================================
 
