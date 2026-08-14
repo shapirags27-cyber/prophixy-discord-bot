@@ -32,6 +32,7 @@ const { handleVote, handleStakeSubmit } = require("./interactions/vote");
 const { resolveMarket } = require("./commands/resolve");
 const {
   getLeaderboard,
+  getInviteLeaderboard,
   getUserRank
 } = require("./services/leaderboard");
 
@@ -209,9 +210,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       if (interaction.customId === "prophixy_profile") {
 
-        await interaction.deferReply({
-          flags: MessageFlags.Ephemeral
-        });
+        await interaction.deferReply();
 
         try {
 
@@ -272,9 +271,7 @@ ${user.sbt?.role || "Not Verified"}`
 
       if (interaction.customId === "prophixy_leaderboard") {
 
-        await interaction.deferReply({
-          flags: MessageFlags.Ephemeral
-        });
+        await interaction.deferReply();
 
         try {
 
@@ -332,6 +329,77 @@ ${user.sbt?.role || "Not Verified"}`
           await interaction.editReply({
             content:
               "❌ Unable to load the PHX leaderboard."
+          }).catch(() => {});
+
+        }
+
+        return;
+      }
+
+
+      // =====================================================
+      // INVITE LEADERBOARD BUTTON
+      // =====================================================
+
+      if (interaction.customId === "prophixy_invite_leaderboard") {
+
+        await interaction.deferReply();
+
+        try {
+
+          const users =
+            await getInviteLeaderboard(10);
+
+          if (!users.length) {
+
+            return interaction.editReply({
+              content:
+                "🎁 The invite leaderboard is currently empty."
+            });
+
+          }
+
+          const medals = ["🥇", "🥈", "🥉"];
+
+          const lines =
+            users.map((user, index) => {
+
+              const position =
+                medals[index] ||
+                `**${index + 1}.**`;
+
+              return (
+                `${position} <@${user.discordId}> — ` +
+                `**${Number(user.invites || 0)} invites**`
+              );
+
+            });
+
+          const leaderboardEmbed =
+            new EmbedBuilder()
+              .setColor(0x00C853)
+              .setTitle("🎁 Prophixy Invite Leaderboard")
+              .setDescription(lines.join("\n"))
+              .setFooter({
+                text:
+                  "Earn +10 PHX for every successful unique invite."
+              })
+              .setTimestamp();
+
+          await interaction.editReply({
+            embeds: [leaderboardEmbed]
+          });
+
+        } catch (error) {
+
+          console.error(
+            "❌ Invite leaderboard error:",
+            error
+          );
+
+          await interaction.editReply({
+            content:
+              "❌ Unable to load the invite leaderboard."
           }).catch(() => {});
 
         }
@@ -735,17 +803,71 @@ ${user.sbt?.role || "Not Verified"}`
             );
 
 
-        const leaderboardRow =
-          new ActionRowBuilder()
-            .addComponents(
-              leaderboardButton
+        const inviteLeaderboardButton =
+          new ButtonBuilder()
+            .setCustomId(
+              "prophixy_invite_leaderboard"
+            )
+            .setLabel(
+              "Invite Leaderboard"
+            )
+            .setEmoji("🎁")
+            .setStyle(
+              ButtonStyle.Success
             );
 
 
-        await leaderboardChannel.send({
-          embeds: [leaderboardEmbed],
-          components: [leaderboardRow]
-        });
+        const leaderboardRow =
+          new ActionRowBuilder()
+            .addComponents(
+              leaderboardButton,
+              inviteLeaderboardButton
+            );
+
+
+        // =====================================================
+        // UPDATE EXISTING LEADERBOARD PANEL
+        // =====================================================
+
+        const existingLeaderboardMessages =
+          await leaderboardChannel.messages.fetch({
+            limit: 50
+          });
+
+        const existingLeaderboardMessage =
+          existingLeaderboardMessages.find(
+            message =>
+              message.author.id === client.user.id &&
+              message.embeds.some(
+                embed =>
+                  embed.title ===
+                  "🏆 Prophixy PHX Leaderboard"
+              )
+          );
+
+        if (existingLeaderboardMessage) {
+
+          await existingLeaderboardMessage.edit({
+            embeds: [leaderboardEmbed],
+            components: [leaderboardRow]
+          });
+
+          console.log(
+            "♻️ Updated existing PHX leaderboard panel."
+          );
+
+        } else {
+
+          await leaderboardChannel.send({
+            embeds: [leaderboardEmbed],
+            components: [leaderboardRow]
+          });
+
+          console.log(
+            "🆕 Created PHX leaderboard panel."
+          );
+
+        }
 
 
         // =====================================================
