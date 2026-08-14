@@ -1502,12 +1502,20 @@ ${user.sbt?.role || "Not Verified"}`
       const creatorRole =
         creatorUser?.sbt?.role || "none";
 
+      const isAdmin =
+        interaction.member?.permissions?.has(
+          PermissionFlagsBits.Administrator
+        );
+
       const allowedCreatorRoles = [
         "Top Forecaster",
         "Market Creator"
       ];
 
-      if (!allowedCreatorRoles.includes(creatorRole)) {
+      if (
+        !isAdmin &&
+        !allowedCreatorRoles.includes(creatorRole)
+      ) {
 
         return interaction.editReply({
           content:
