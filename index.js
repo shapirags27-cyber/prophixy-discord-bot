@@ -1727,7 +1727,7 @@ ${user.sbt?.role || "Not Verified"}`
       );
 
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [embed],
         components: [row]
       });
