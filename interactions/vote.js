@@ -119,11 +119,27 @@ async function handleVote(interaction) {
 
 async function handleStakeSubmit(interaction) {
 
+  console.log(
+    "🎯 STAKE SUBMISSION RECEIVED:",
+    interaction.customId,
+    interaction.user.id
+  );
+
   if (!interaction.customId.startsWith("stake_")) {
+    console.log("⚠️ Not a stake interaction.");
     return;
   }
 
+  console.log("🎯 Processing stake submission...");
+
   await db.read();
+
+  console.log(
+    "🎯 Database loaded. Users:",
+    db.data.users.length,
+    "Events:",
+    db.data.events.length
+  );
 
   const [, eventId, optionIndex] =
     interaction.customId.split("_");
