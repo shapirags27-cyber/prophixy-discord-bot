@@ -1587,6 +1587,102 @@ ${user.sbt?.role || "Not Verified"}`
 
 
     // =====================================================
+    // AI MARKET GENERATOR
+    // =====================================================
+
+    if (
+      interaction.commandName === "ai"
+    ) {
+
+      await interaction.deferReply();
+
+      try {
+
+        const category =
+          interaction.options.getString(
+            "category"
+          );
+
+        const subject =
+          interaction.options.getString(
+            "subject"
+          );
+
+        console.log(
+          `🤖 AI market generation requested: ${category} / ${subject}`
+        );
+
+        const markets =
+          await generateMarkets({
+            category,
+            subject
+          });
+
+        if (
+          !Array.isArray(markets) ||
+          markets.length === 0
+        ) {
+
+          return interaction.editReply({
+            content:
+              "❌ AI did not generate any markets."
+          });
+
+        }
+
+        const formatted =
+          markets.map(
+            (market, index) => {
+
+              const options =
+                Array.isArray(market.options)
+                  ? market.options
+                      .map(
+                        (option, optionIndex) =>
+                          `**${optionIndex + 1}.** ${option}`
+                      )
+                      .join("\n")
+                  : "No options returned.";
+
+              return (
+                `### ${index + 1}. ${market.question}\n` +
+                `📂 Category: **${market.category || category}**\n` +
+                `🧾 Resolution: **${market.resolutionType || "Not specified"}**\n` +
+                `🔎 Source: **${market.resolutionSource || "Not specified"}**\n` +
+                `${options}`
+              );
+
+            }
+          )
+          .join("\n\n");
+
+        return interaction.editReply({
+          content:
+            `🤖 **Prophixy AI Market Suggestions**\n\n` +
+            `**Subject:** ${subject}\n\n` +
+            formatted
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ AI market generation error:",
+          error
+        );
+
+        return interaction.editReply({
+          content:
+            `❌ **AI market generation failed.**\n\n` +
+            `Reason: ${error.message}`
+        });
+
+      }
+
+    }
+
+
+
+    // =====================================================
     // CREATE EVENT
     // =====================================================
 
