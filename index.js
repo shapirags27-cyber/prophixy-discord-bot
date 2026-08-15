@@ -5,6 +5,7 @@ const {
   GatewayIntentBits,
   Events,
   ActionRowBuilder,
+  StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
   ModalBuilder,
@@ -702,6 +703,55 @@ ${user.sbt?.role || "Not Verified"}`
         return;
       }
 
+    }
+
+
+    // =====================================================
+    // AI MARKET SELECTION
+    // =====================================================
+
+    if (
+      interaction.isStringSelectMenu() &&
+      interaction.customId.startsWith("ai_market_select_")
+    ) {
+
+      const ownerId =
+        interaction.customId.replace(
+          "ai_market_select_",
+          ""
+        );
+
+      // Only the creator who generated the suggestions
+      // can select one of them.
+      if (
+        interaction.user.id !== ownerId
+      ) {
+
+        return interaction.reply({
+          content:
+            "❌ Only the creator who generated these AI suggestions can select one.",
+          flags: MessageFlags.Ephemeral
+        });
+
+      }
+
+      const selectedIndex =
+        Number(
+          interaction.values[0]
+        );
+
+      console.log(
+        `🤖 AI market selected: index ${selectedIndex} by ${interaction.user.tag}`
+      );
+
+      await interaction.reply({
+        content:
+          `✅ **Market ${selectedIndex + 1} selected.**\n\n` +
+          `The AI suggestion has been selected successfully.\n\n` +
+          `⚠️ **Test mode:** No market has been created and no PHX has been charged yet.`
+      });
+
+      return;
     }
 
 
@@ -1630,8 +1680,55 @@ ${user.sbt?.role || "Not Verified"}`
 
         }
 
+        // AI should suggest markets only.
+        // It must NOT create or charge for anything yet.
+
+        const limitedMarkets =
+          markets.slice(0, 5);
+
+        const selectOptions =
+          limitedMarkets.map(
+            (market, index) => {
+
+              let description =
+                String(market.question || "AI market suggestion");
+
+              if (description.length > 100) {
+                description =
+                  description.slice(0, 97) + "...";
+              }
+
+              return {
+                label:
+                  `Market ${index + 1}`,
+                description,
+                value:
+                  String(index)
+              };
+
+            }
+          );
+
+        const selectMenu =
+          new StringSelectMenuBuilder()
+            .setCustomId(
+              `ai_market_select_${interaction.user.id}`
+            )
+            .setPlaceholder(
+              "Select one market to continue"
+            )
+            .addOptions(
+              selectOptions
+            );
+
+        const row =
+          new ActionRowBuilder()
+            .addComponents(
+              selectMenu
+            );
+
         const formatted =
-          markets.map(
+          limitedMarkets.map(
             (market, index) => {
 
               const options =
@@ -1660,7 +1757,12 @@ ${user.sbt?.role || "Not Verified"}`
           content:
             `🤖 **Prophixy AI Market Suggestions**\n\n` +
             `**Subject:** ${subject}\n\n` +
-            formatted
+            `${formatted}\n\n` +
+            `👇 **Select ONE suggestion below to continue.**\n` +
+            `No market has been created and no PHX has been charged yet.`,
+          components: [
+            row
+          ]
         });
 
       } catch (error) {
@@ -1679,7 +1781,6 @@ ${user.sbt?.role || "Not Verified"}`
       }
 
     }
-
 
 
     // =====================================================
