@@ -14,6 +14,64 @@ const {
 
 const MIN_STAKE = 100;
 
+const {
+  getFixtureResult
+} = require("../services/apiFootball");
+
+// ==========================================
+// CHECK WHETHER A FOOTBALL MARKET IS STILL OPEN
+// ==========================================
+
+async function footballPredictionsOpen(event) {
+
+  // Non-football markets are unaffected.
+  if (!event?.fixtureId) {
+    return {
+      open: true,
+      checked: false
+    };
+  }
+
+  const result =
+    await getFixtureResult(event.fixtureId);
+
+  if (!result.found) {
+    return {
+      open: false,
+      checked: true,
+      reason:
+        "The football fixture could not be verified right now."
+    };
+  }
+
+  // Once API-Football reports a live status,
+  // predictions must be closed.
+  if (result.started) {
+    return {
+      open: false,
+      checked: true,
+      started: true,
+      finished: result.finished,
+      status: result.status
+    };
+  }
+
+  if (result.finished) {
+    return {
+      open: false,
+      checked: true,
+      finished: true,
+      status: result.status
+    };
+  }
+
+  return {
+    open: true,
+    checked: true,
+    status: result.status
+  };
+}
+
 // ==========================================
 // VOTE BUTTON → OPEN STAKE MODAL
 // ==========================================
@@ -62,6 +120,45 @@ async function handleVote(interaction) {
         "❌ This prediction market has ended.",
       ephemeral: true
     });
+  }
+
+  // ==========================================
+  // REAL-TIME FOOTBALL KICKOFF CHECK
+  // ==========================================
+
+  if (event.fixtureId) {
+
+    try {
+
+      const footballStatus =
+        await footballPredictionsOpen(event);
+
+      if (!footballStatus.open) {
+
+        return interaction.reply({
+          content:
+            footballStatus.finished
+              ? "❌ **This match has finished. Predictions are closed.**"
+              : "🔴 **This match has started. Predictions are now closed.**",
+          ephemeral: true
+        });
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "❌ Football status check failed:",
+        error.message
+      );
+
+      return interaction.reply({
+        content:
+          "⚠️ I couldn't verify the live match status. Please try again.",
+        ephemeral: true
+      });
+
+    }
   }
 
   const selectedOption = Number(optionIndex);

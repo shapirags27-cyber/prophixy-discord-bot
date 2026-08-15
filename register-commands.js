@@ -96,6 +96,33 @@ const commands = [
     ),
 
   // ===========================
+  // AI MARKET CREATOR
+  // ===========================
+  new SlashCommandBuilder()
+    .setName("ai")
+    .setDescription("Generate prediction markets with AI")
+    .addStringOption(option =>
+      option
+        .setName("category")
+        .setDescription("Market category")
+        .setRequired(true)
+        .addChoices(
+          { name: "Africa", value: "africa" },
+          { name: "Crypto", value: "crypto" },
+          { name: "Sports", value: "sports" },
+          { name: "Politics", value: "politics" },
+          { name: "Economy", value: "economy" },
+          { name: "Community", value: "community" }
+        )
+    )
+    .addStringOption(option =>
+      option
+        .setName("subject")
+        .setDescription("What should the AI create markets about?")
+        .setRequired(true)
+    ),
+
+  // ===========================
   // CREATE MARKET
   // ===========================
   new SlashCommandBuilder()

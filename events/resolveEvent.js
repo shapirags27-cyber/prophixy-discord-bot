@@ -12,7 +12,11 @@ const CREATOR_PERCENT = 1;
 const WINNER_PERCENT = 97;
 const RESERVE_PERCENT = 2;
 
-async function resolveEvent(eventId, winningOption) {
+async function resolveEvent(
+  eventId,
+  winningOption,
+  resolutionMeta = {}
+) {
 
   await db.read();
 
@@ -28,7 +32,14 @@ async function resolveEvent(eventId, winningOption) {
     };
   }
 
-  if (event.status !== "active") {
+  // Normal markets must still be active.
+  // Football markets are changed to "in_progress"
+  // when the real match starts, and may then be
+  // automatically resolved when the match finishes.
+  if (
+    event.status !== "active" &&
+    event.status !== "in_progress"
+  ) {
     return {
       success: false,
       message: "Event already resolved."
@@ -126,9 +137,11 @@ async function resolveEvent(eventId, winningOption) {
     winnerOption;
 
   event.resolution = {
-    type: "manual",
-    source: "discord",
-    resolvedAt: new Date().toISOString()
+    type: resolutionMeta.type || "manual",
+    source: resolutionMeta.source || "discord",
+    resolvedAt:
+      resolutionMeta.resolvedAt ||
+      new Date().toISOString()
   };
 
   // ==========================================

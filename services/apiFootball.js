@@ -83,37 +83,6 @@ async function getFixtures({
 
   let errors = response.data?.errors || {};
 
-  // ==========================================
-  // FREE PLAN SEASON FALLBACK
-  // API-Football Free currently supports
-  // seasons 2022-2024.
-  // ==========================================
-
-  if (
-    errors.plan &&
-    typeof errors.plan === "string" &&
-    errors.plan.includes("try from 2022 to 2024")
-  ) {
-
-    const fallbackSeason = 2024;
-
-    console.log(
-      `⚠️ API-Football Free plan does not support season ${season}.`
-    );
-
-    console.log(
-      `🔄 Automatically retrying with season ${fallbackSeason}...`
-    );
-
-    params.season = fallbackSeason;
-
-    response = await client.get("/fixtures", {
-      params
-    });
-
-    errors = response.data?.errors || {};
-  }
-
   const remaining =
     response.headers["x-ratelimit-requests-remaining"];
 
@@ -169,9 +138,46 @@ async function getFixtureResult(fixtureId) {
   const finished =
     finishedStatuses.includes(status);
 
+  // API-Football statuses that mean the match has actually started.
+  // Predictions must be closed once any of these statuses is reached.
+  const liveStatuses = [
+    "1H",
+    "HT",
+    "2H",
+    "ET",
+    "P",
+    "LIVE"
+  ];
+
+  const started =
+    liveStatuses.includes(status);
+
+  // ==========================================
+  // REAL-TIME FIXTURE TIMING
+  // ==========================================
+
+  const kickoffTimestamp =
+    Number(fixture.fixture?.timestamp || 0) * 1000;
+
+  const now =
+    Date.now();
+
+  // The scheduled kickoff time is useful for
+  // deciding when the market should be watched
+  // closely. The API status remains the authority
+  // for the actual match lifecycle.
+  const kickoffPassed =
+    kickoffTimestamp > 0 &&
+    now >= kickoffTimestamp;
+
   return {
     found: true,
+    started,
     finished,
+    kickoffPassed,
+    kickoffTimestamp,
+    kickoffDate:
+      fixture.fixture?.date || null,
     status,
     fixture
   };

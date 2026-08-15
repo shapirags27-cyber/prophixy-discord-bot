@@ -35,6 +35,7 @@ const { createEvent } = require("./events/createEvent");
 const { handleVote, handleStakeSubmit } = require("./interactions/vote");
 const { resolveMarket } = require("./commands/resolve");
 const { autoResolveFootballMarkets } = require("./services/autoResolveFootball");
+const { generateMarkets } = require("./services/aiMarketGenerator");
 const {
   getLeaderboard,
   getInviteLeaderboard,
@@ -79,6 +80,40 @@ client.once(Events.ClientReady, async () => {
   // AUTO FOOTBALL RESOLUTION
   // ==========================================
 
+  // Run once immediately when the bot starts.
+  try {
+    const results = await autoResolveFootballMarkets();
+
+    const resolved = results.filter(r => r.resolved);
+
+    if (resolved.length > 0) {
+      console.log(
+        `⚽ Automatically resolved ${resolved.length} football market(s).`
+      );
+    }
+  } catch (error) {
+    console.error(
+      "❌ Initial auto football resolver error:",
+      error.message
+    );
+  }
+
+  // ==========================================
+  // REAL-TIME FOOTBALL MARKET MONITOR
+  // ==========================================
+  //
+  // Check football fixtures every minute.
+  //
+  // The resolver itself decides whether a match:
+  //   1. Has not started
+  //   2. Has started → close predictions
+  //   3. Is still playing
+  //   4. Has finished → resolve automatically
+  //
+  // Other market categories are unaffected because
+  // autoResolveFootballMarkets() only selects events
+  // that contain a fixtureId.
+  //
   setInterval(async () => {
 
     try {
@@ -86,13 +121,28 @@ client.once(Events.ClientReady, async () => {
       const results =
         await autoResolveFootballMarkets();
 
+      const closed =
+        results.filter(
+          r => r.predictionsClosed
+        );
+
       const resolved =
-        results.filter(r => r.resolved);
+        results.filter(
+          r => r.resolved
+        );
+
+      if (closed.length > 0) {
+
+        console.log(
+          `🔴 Closed predictions for ${closed.length} football market(s).`
+        );
+
+      }
 
       if (resolved.length > 0) {
 
         console.log(
-          `⚽ Automatically resolved ${resolved.length} football market(s).`
+          `🏆 Automatically resolved ${resolved.length} football market(s).`
         );
 
       }
@@ -106,7 +156,7 @@ client.once(Events.ClientReady, async () => {
 
     }
 
-  }, 5 * 60 * 1000); // every 5 minutes
+  }, 60 * 1000); // every 1 minute
 
 });
 
