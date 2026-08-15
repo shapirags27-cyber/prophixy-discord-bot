@@ -22,6 +22,7 @@ const {
   getUser,
   createUser,
   save,
+  getMarketsCreatedToday,
 } = require("./services/database");
 
 const { verifySBT } = require("./services/sbt");
@@ -48,6 +49,10 @@ const {
   findUsedInvite,
   recordInvite
 } = require("./services/invites");
+
+// Temporary storage for AI suggestions awaiting creator selection.
+// Nothing is created or charged until the creator confirms the final market.
+const pendingAiMarkets = new Map();
 
 const client = new Client({
   intents: [
@@ -740,16 +745,73 @@ ${user.sbt?.role || "Not Verified"}`
           interaction.values[0]
         );
 
+      const pending =
+        pendingAiMarkets.get(
+          interaction.user.id
+        );
+
+      if (
+        !pending ||
+        !Array.isArray(pending.markets) ||
+        !pending.markets[selectedIndex]
+      ) {
+
+        return interaction.reply({
+          content:
+            "❌ This AI market selection has expired. Please run `/ai` again.",
+          flags: MessageFlags.Ephemeral
+        });
+
+      }
+
+      pending.selectedIndex = selectedIndex;
+
+      const selectedMarket =
+        pending.markets[selectedIndex];
+
       console.log(
         `🤖 AI market selected: index ${selectedIndex} by ${interaction.user.tag}`
       );
 
-      await interaction.reply({
-        content:
-          `✅ **Market ${selectedIndex + 1} selected.**\n\n` +
-          `The AI suggestion has been selected successfully.\n\n` +
-          `⚠️ **Test mode:** No market has been created and no PHX has been charged yet.`
-      });
+      const durationModal =
+        new ModalBuilder()
+          .setCustomId(
+            `ai_market_duration_${interaction.user.id}`
+          )
+          .setTitle(
+            "Create AI Prediction Market"
+          );
+
+      const durationInput =
+        new TextInputBuilder()
+          .setCustomId(
+            "duration"
+          )
+          .setLabel(
+            "Market duration"
+          )
+          .setPlaceholder(
+            "Examples: 30m, 2h, 3d, 1w"
+          )
+          .setStyle(
+            TextInputStyle.Short
+          )
+          .setRequired(true)
+          .setMaxLength(10);
+
+      const durationRow =
+        new ActionRowBuilder()
+          .addComponents(
+            durationInput
+          );
+
+      durationModal.addComponents(
+        durationRow
+      );
+
+      await interaction.showModal(
+        durationModal
+      );
 
       return;
     }
@@ -766,6 +828,339 @@ ${user.sbt?.role || "Not Verified"}`
       "customId=",
       interaction.customId || "NONE"
     );
+
+    // =====================================================
+    // AI MARKET DURATION SUBMISSION
+    // =====================================================
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId.startsWith("ai_market_duration_")
+    ) {
+
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+
+        const ownerId =
+          interaction.customId.replace(
+            "ai_market_duration_",
+            ""
+          );
+
+        // Security: only the creator who generated the AI
+        // suggestions can complete this market.
+        if (interaction.user.id !== ownerId) {
+
+          return interaction.editReply({
+            content:
+              "❌ You are not authorized to create this AI market."
+          });
+
+        }
+
+        const pending =
+          pendingAiMarkets.get(ownerId);
+
+        if (
+          !pending ||
+          !Array.isArray(pending.markets)
+        ) {
+
+          return interaction.editReply({
+            content:
+              "❌ This AI market selection has expired. Please run `/ai` again."
+          });
+
+        }
+
+        /*
+         * The selected market is stored by the selection step.
+         * We keep the selected index in the pending object.
+         */
+        const selectedIndex =
+          Number(pending.selectedIndex);
+
+        const selectedMarket =
+          pending.markets[selectedIndex];
+
+        if (!selectedMarket) {
+
+          return interaction.editReply({
+            content:
+              "❌ The selected AI market could not be found. Please run `/ai` again."
+          });
+
+        }
+
+        // =================================================
+        // CREATOR CHECK
+        // =================================================
+
+        const creatorUser =
+          await getUser(ownerId);
+
+        const creatorRole =
+          creatorUser?.sbt?.role || "none";
+
+        const isAdmin =
+          interaction.member?.permissions?.has(
+            PermissionFlagsBits.Administrator
+          );
+
+        const allowedCreatorRoles = [
+          "Top Forecaster",
+          "Market Creator"
+        ];
+
+        if (
+          !isAdmin &&
+          !allowedCreatorRoles.includes(creatorRole)
+        ) {
+
+          return interaction.editReply({
+            content:
+              "❌ **You cannot create markets.**\n\n" +
+              "Only users with the **Top Forecaster** or **Market Creator** SBT role can create prediction markets."
+          });
+
+        }
+
+        // =================================================
+        // DAILY MARKET CREATION LIMIT
+        // =================================================
+
+        const marketsCreatedToday =
+          await getMarketsCreatedToday(ownerId);
+
+        if (marketsCreatedToday >= 5) {
+
+          return interaction.editReply({
+            content:
+              "❌ **Daily market limit reached.**\n\n" +
+              "You can create a maximum of **5 prediction markets per day**.\n" +
+              `📊 You have already created **${marketsCreatedToday}/5** today.`
+          });
+
+        }
+
+        // =================================================
+        // MARKET CREATION FEE
+        // =================================================
+
+        const creatorBalance =
+          Number(creatorUser?.phx || 0);
+
+        if (
+          creatorBalance <
+          MARKET_CREATION_FEE
+        ) {
+
+          return interaction.editReply({
+            content:
+              "❌ **Insufficient PHX to create this market.**\n\n" +
+              `💰 Market creation fee: **${MARKET_CREATION_FEE.toLocaleString()} PHX**\n` +
+              `💳 Your balance: **${creatorBalance.toLocaleString()} PHX**`
+          });
+
+        }
+
+        // =================================================
+        // DURATION
+        // =================================================
+
+        const duration =
+          interaction.fields.getTextInputValue(
+            "duration"
+          ).trim();
+
+        const match =
+          duration.match(
+            /^(\d+)(m|h|d|w)$/i
+          );
+
+        if (!match) {
+
+          return interaction.editReply({
+            content:
+              "❌ Invalid duration.\n\n" +
+              "Examples: `30m`, `2h`, `3d`, `1w`"
+          });
+
+        }
+
+        const amount =
+          Number(match[1]);
+
+        const unit =
+          match[2].toLowerCase();
+
+        let milliseconds = 0;
+
+        switch (unit) {
+
+          case "m":
+            milliseconds =
+              amount * 60 * 1000;
+            break;
+
+          case "h":
+            milliseconds =
+              amount * 60 * 60 * 1000;
+            break;
+
+          case "d":
+            milliseconds =
+              amount * 24 * 60 * 60 * 1000;
+            break;
+
+          case "w":
+            milliseconds =
+              amount * 7 * 24 * 60 * 60 * 1000;
+            break;
+
+        }
+
+        // =================================================
+        // CREATE EXACTLY ONE MARKET
+        // =================================================
+
+        const event =
+          await createEvent(
+            selectedMarket.category || pending.category,
+            selectedMarket.question,
+            selectedMarket.options,
+            Date.now() + milliseconds,
+            ownerId,
+            null
+          );
+
+        // =================================================
+        // CHARGE FEE ONLY AFTER SUCCESSFUL CREATION
+        // =================================================
+
+        creatorUser.phx =
+          creatorBalance -
+          MARKET_CREATION_FEE;
+
+        await save();
+
+        console.log(
+          `💰 Charged ${MARKET_CREATION_FEE} PHX AI market creation fee from ${interaction.user.tag}`
+        );
+
+        // =================================================
+        // PUBLISH MARKET
+        // =================================================
+
+        const embed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(
+              "📊 New AI Prediction Market"
+            )
+            .setDescription(
+              selectedMarket.question
+            )
+            .addFields(
+              {
+                name: "📂 Category",
+                value:
+                  selectedMarket.category ||
+                  pending.category,
+                inline: true
+              },
+              {
+                name: "🏦 Market Pool",
+                value: "0 PHX",
+                inline: true
+              },
+              {
+                name: "👥 Participants",
+                value: "0",
+                inline: true
+              },
+              {
+                name: "⏳ Duration",
+                value: duration,
+                inline: true
+              },
+              {
+                name: "📌 Status",
+                value: "🟢 Active",
+                inline: true
+              },
+              {
+                name: "🆔 Market ID",
+                value: event.id,
+                inline: true
+              }
+            )
+            .setFooter({
+              text:
+                "One prediction per user • Results are based on real-world outcomes"
+            })
+            .setTimestamp();
+
+        const row =
+          new ActionRowBuilder();
+
+        selectedMarket.options.forEach(
+          (option, index) => {
+
+            row.addComponents(
+              new ButtonBuilder()
+                .setCustomId(
+                  `vote_${event.id}_${index}`
+                )
+                .setLabel(option)
+                .setStyle(
+                  ButtonStyle.Primary
+                )
+            );
+
+          }
+        );
+
+        if (interaction.channel) {
+
+          await interaction.channel.send({
+            embeds: [embed],
+            components: [row]
+          });
+
+        }
+
+        // No longer needed after successful creation.
+        pendingAiMarkets.delete(ownerId);
+
+        return interaction.editReply({
+          content:
+            "✅ **AI prediction market created successfully!**\n\n" +
+            `📊 **${selectedMarket.question}**\n` +
+            `💰 **${MARKET_CREATION_FEE.toLocaleString()} PHX** creation fee charged.\n` +
+            `📈 Market ID: **${event.id}**\n` +
+            `📊 Markets created today: **${marketsCreatedToday + 1}/5**`
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ AI market creation error:",
+          error
+        );
+
+        return interaction.editReply({
+          content:
+            `❌ **AI market creation failed.**\n\nReason: ${error.message}`
+        }).catch(() => {});
+
+      }
+
+    }
+
 
     if (
       interaction.isModalSubmit() &&
@@ -1644,7 +2039,43 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.commandName === "ai"
     ) {
 
-      await interaction.deferReply();
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      // =================================================
+      // MARKET CREATOR ROLE CHECK
+      // =================================================
+
+      const aiCreatorUser =
+        await getUser(interaction.user.id);
+
+      const aiCreatorRole =
+        aiCreatorUser?.sbt?.role || "none";
+
+      const aiIsAdmin =
+        interaction.member?.permissions?.has(
+          PermissionFlagsBits.Administrator
+        );
+
+      const allowedCreatorRoles = [
+        "Top Forecaster",
+        "Market Creator"
+      ];
+
+      if (
+        !aiIsAdmin &&
+        !allowedCreatorRoles.includes(aiCreatorRole)
+      ) {
+
+        return interaction.editReply({
+          content:
+            "❌ **You cannot use the AI market creator.**\n\n" +
+            "Only users with the **Top Forecaster** or **Market Creator** SBT role can create prediction markets.\n\n" +
+            "👤 Everyone else can participate in existing markets."
+        });
+
+      }
 
       try {
 
@@ -1685,6 +2116,18 @@ ${user.sbt?.role || "Not Verified"}`
 
         const limitedMarkets =
           markets.slice(0, 5);
+
+        // Keep these suggestions temporarily so the creator's
+        // selection can be continued through the next interaction.
+        pendingAiMarkets.set(
+          interaction.user.id,
+          {
+            category,
+            subject,
+            markets: limitedMarkets,
+            createdAt: Date.now()
+          }
+        );
 
         const selectOptions =
           limitedMarkets.map(
@@ -1827,6 +2270,27 @@ ${user.sbt?.role || "Not Verified"}`
             "❌ **You cannot create markets.**\\n\\n" +
             "Only users with the **Top Forecaster** or **Market Creator** SBT role can create prediction markets.\\n\\n" +
             "👤 Everyone else can participate in existing markets.",
+          flags: MessageFlags.Ephemeral
+        });
+
+      }
+
+      // =====================================================
+      // DAILY MARKET CREATION LIMIT
+      // =====================================================
+
+      const marketsCreatedToday =
+        await getMarketsCreatedToday(
+          interaction.user.id
+        );
+
+      if (marketsCreatedToday >= 5) {
+
+        return interaction.editReply({
+          content:
+            "❌ **Daily market limit reached.**\\n\\n" +
+            "You can create a maximum of **5 prediction markets per day**.\\n" +
+            `📊 You have already created **${marketsCreatedToday}/5** today.`,
           flags: MessageFlags.Ephemeral
         });
 

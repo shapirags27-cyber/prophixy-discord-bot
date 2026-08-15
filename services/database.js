@@ -138,6 +138,33 @@ async function save() {
 }
 
 // ==============================
+// DAILY MARKET CREATION LIMIT
+// ==============================
+
+async function getMarketsCreatedToday(creatorId) {
+  await db.read();
+
+  const now = new Date();
+
+  const startOfDay = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+
+  const endOfDay =
+    startOfDay +
+    24 * 60 * 60 * 1000;
+
+  return (db.data.events || []).filter(
+    event =>
+      event.creatorId === creatorId &&
+      Number(event.id) >= startOfDay &&
+      Number(event.id) < endOfDay
+  ).length;
+}
+
+// ==============================
 // GET USER
 // ==============================
 
@@ -245,5 +272,6 @@ module.exports = {
   initDB,
   getUser,
   createUser,
-  updateUser
+  updateUser,
+  getMarketsCreatedToday
 };
