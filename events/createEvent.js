@@ -5,7 +5,8 @@ async function createEvent(
   question,
   options,
   endsAt,
-  creatorId
+  creatorId,
+  fixtureId = null
 ) {
   await db.read();
 
@@ -26,13 +27,21 @@ async function createEvent(
     // PHX paid to the market creator at resolution
     creatorReward: 0,
 
-    // 93% of the pool distributed to winning predictors
+    // 97% of the pool distributed to winning predictors
     winnerPool: 0,
 
-    // 4% reserved for Prophixy
+    // 2% reserved for Prophixy
     reserveAmount: 0,
 
     creatorId,
+
+    // ==========================================
+    // EXTERNAL FIXTURE
+    // ==========================================
+    // Used for automatic real-world resolution.
+    // Currently supported: API-Football.
+    fixtureId:
+      fixtureId ? Number(fixtureId) : null,
 
     endsAt,
 

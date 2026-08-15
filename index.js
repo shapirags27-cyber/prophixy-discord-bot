@@ -34,6 +34,7 @@ const { assignSbtRole } = require("./services/roles");
 const { createEvent } = require("./events/createEvent");
 const { handleVote, handleStakeSubmit } = require("./interactions/vote");
 const { resolveMarket } = require("./commands/resolve");
+const { autoResolveFootballMarkets } = require("./services/autoResolveFootball");
 const {
   getLeaderboard,
   getInviteLeaderboard,
@@ -73,6 +74,40 @@ client.once(Events.ClientReady, async () => {
 
   console.log(`✅ Logged in as ${client.user.tag}`);
   console.log("🚀 Prophixy Beta is online!");
+
+  // ==========================================
+  // AUTO FOOTBALL RESOLUTION
+  // ==========================================
+
+  setInterval(async () => {
+
+    try {
+
+      const results =
+        await autoResolveFootballMarkets();
+
+      const resolved =
+        results.filter(r => r.resolved);
+
+      if (resolved.length > 0) {
+
+        console.log(
+          `⚽ Automatically resolved ${resolved.length} football market(s).`
+        );
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "❌ Auto football resolver error:",
+        error.message
+      );
+
+    }
+
+  }, 5 * 60 * 1000); // every 5 minutes
+
 });
 
 // =====================================================
@@ -1477,9 +1512,9 @@ ${user.sbt?.role || "Not Verified"}`
             `🆔 Market: **${marketId}**\n` +
             `🏆 Winning option: **${winnerNumber}**\n\n` +
             `🏦 Total pool: **${Number(result.totalPool || 0).toLocaleString()} PHX**\n` +
-            `👤 Creator reward (3%): **${Number(result.creatorReward || 0).toLocaleString()} PHX**\n` +
-            `🏆 Winner pool (93%): **${Number(result.winnerPool || 0).toLocaleString()} PHX**\n` +
-            `🏦 Reserve (4%): **${Number(result.reserveAmount || 0).toLocaleString()} PHX**\n\n` +
+            `👤 Creator reward (1%): **${Number(result.creatorReward || 0).toLocaleString()} PHX**\n` +
+            `🏆 Winner pool (97%): **${Number(result.winnerPool || 0).toLocaleString()} PHX**\n` +
+            `🏦 Reserve (2%): **${Number(result.reserveAmount || 0).toLocaleString()} PHX**\n\n` +
             `👥 Winners: **${result.winners}**\n` +
             `💰 Distributed to winners: **${Number(result.distributedToWinners || 0).toLocaleString()} PHX**`
         });
@@ -1598,6 +1633,11 @@ ${user.sbt?.role || "Not Verified"}`
           "duration"
         );
 
+      const fixtureId =
+        interaction.options.getString(
+          "fixtureid"
+        );
+
 
       const match =
         duration.match(
@@ -1655,7 +1695,8 @@ ${user.sbt?.role || "Not Verified"}`
             question,
             options,
             Date.now() + milliseconds,
-            interaction.user.id
+            interaction.user.id,
+            fixtureId
           );
 
 

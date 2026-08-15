@@ -156,6 +156,12 @@ const commands = [
         .setName("option5")
         .setDescription("Fifth option (optional)")
         .setRequired(false)
+    )
+    .addStringOption(option =>
+      option
+        .setName("fixtureid")
+        .setDescription("API-Football fixture ID (football markets only)")
+        .setRequired(false)
     ),
 
   // ===========================

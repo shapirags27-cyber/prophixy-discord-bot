@@ -8,9 +8,9 @@ const {
 const { updatePredictionStats } =
   require("../services/predictions");
 
-const CREATOR_PERCENT = 3;
-const WINNER_PERCENT = 93;
-const RESERVE_PERCENT = 4;
+const CREATOR_PERCENT = 1;
+const WINNER_PERCENT = 97;
+const RESERVE_PERCENT = 2;
 
 async function resolveEvent(eventId, winningOption) {
 
@@ -101,9 +101,9 @@ async function resolveEvent(eventId, winningOption) {
     );
 
   const reserveAmount =
-    totalPool -
-    creatorReward -
-    winnerPool;
+    Math.floor(
+      totalPool * RESERVE_PERCENT / 100
+    );
 
   // ==========================================
   // SAVE MARKET ACCOUNTING

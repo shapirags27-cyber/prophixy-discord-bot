@@ -72,6 +72,25 @@ async function initDB() {
       user.bestStreak = 0;
     }
 
+    // Prediction statistics
+    if (!user.predictions) {
+      user.predictions = {
+        total: 0,
+        correct: 0,
+        wrong: 0,
+        currentStreak: 0,
+        bestStreak: 0,
+        accuracy: 0
+      };
+    } else {
+      user.predictions.total ??= 0;
+      user.predictions.correct ??= 0;
+      user.predictions.wrong ??= 0;
+      user.predictions.currentStreak ??= 0;
+      user.predictions.bestStreak ??= 0;
+      user.predictions.accuracy ??= 0;
+    }
+
     // Daily check-in system
     if (user.dailyCheckIns === undefined) {
       user.dailyCheckIns = 0;
