@@ -341,13 +341,28 @@ async function handleStakeSubmit(interaction) {
 
   });
 
+  console.log("🎯 RECORDING PREDICTION...");
+
+  console.log(
+    "🎯 PREDICTIONS COUNT:",
+    db.data.predictions.length
+  );
+
   await updateUser(user);
 
+  console.log("🎯 USER UPDATED SUCCESSFULLY");
+
   await save();
+
+  console.log("🎯 DATABASE SAVED SUCCESSFULLY");
 
   // ==========================================
   // CONFIRMATION
   // ==========================================
+
+  console.log("🎯 SENDING STAKE CONFIRMATION...");
+
+  console.log("🎯 SENDING STAKE CONFIRMATION...");
 
   await interaction.reply({
 
