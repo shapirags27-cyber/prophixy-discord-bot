@@ -818,14 +818,9 @@ ${user.sbt?.role || "Not Verified"}`
         pending.realWorldData?.fixture || null;
 
       const isFootballMarket =
-        String(
-          selectedMarket.category ||
-          pending.category ||
-          ""
-        ).toLowerCase() === "sports" &&
         pending.realWorldData?.sport === "football" &&
         footballFixture &&
-        footballFixture.externalFixtureId &&
+        Number(footballFixture.externalFixtureId) > 0 &&
         footballFixture.externalFixtureProvider ===
           "football-data.org";
 
