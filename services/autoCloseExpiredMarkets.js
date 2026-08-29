@@ -8,8 +8,8 @@ const { db, save } = require("./database");
  *
  *     active -> closed
  *
- * Football markets with fixtureId are deliberately skipped because
- * API-Football controls their lifecycle.
+ * Football markets are deliberately skipped because
+ * football-data.org controls their lifecycle.
  */
 async function autoCloseExpiredMarkets() {
   await db.read();
@@ -20,7 +20,15 @@ async function autoCloseExpiredMarkets() {
 
   for (const event of db.data.events || []) {
     // Only generic non-football markets are handled here.
-    if (event.fixtureId) continue;
+    if (
+      event.category === "sports" ||
+      (
+        event.footballFixture &&
+        event.footballFixture.id &&
+        event.footballFixture.provider ===
+          "football-data.org"
+      )
+    ) continue;
 
     // Already closed/resolved/etc.
     if (event.status !== "active") continue;

@@ -1,7 +1,6 @@
 const {
-  getFixtureResult,
-  getMatchWinner
-} = require("./apiFootball");
+  getMatchResult
+} = require("./footballData");
 
 const {
   db,
@@ -20,7 +19,9 @@ function normalizeOption(option) {
   return String(option || "")
     .trim()
     .toLowerCase()
-    .replace(/[_-]/g, " ");
+    .replace(/[’']/g, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 // ==========================================
@@ -28,20 +29,25 @@ function normalizeOption(option) {
 // ==========================================
 
 function findWinningOption(event, result) {
-
-  if (!event || !result || !result.fixture) {
+  if (
+    !event ||
+    !result ||
+    !result.fixture
+  ) {
     return null;
   }
 
   const winner =
-    getMatchWinner(result.fixture);
+    result.fixture.winner;
 
   if (!winner) {
     return null;
   }
 
   const options =
-    event.options || [];
+    Array.isArray(event.options)
+      ? event.options
+      : [];
 
   const homeTeam =
     normalizeOption(
@@ -63,8 +69,11 @@ function findWinningOption(event, result) {
     Number(homeGoals || 0) +
     Number(awayGoals || 0);
 
-  for (let i = 0; i < options.length; i++) {
-
+  for (
+    let i = 0;
+    i < options.length;
+    i++
+  ) {
     const option =
       normalizeOption(options[i]);
 
@@ -155,21 +164,20 @@ function findWinningOption(event, result) {
     }
 
     // ========================================
-    // TEAM GOAL OPTIONS
+    // EXACT TEAM GOALS
     // ========================================
 
-    const goalMatch =
+    const exactGoalMatch =
       option.match(
         /^(.*?)\s*(\d+)\s*(?:goals?)$/
       );
 
-    if (goalMatch) {
-
+    if (exactGoalMatch) {
       const team =
-        goalMatch[1].trim();
+        exactGoalMatch[1].trim();
 
       const expected =
-        Number(goalMatch[2]);
+        Number(exactGoalMatch[2]);
 
       if (
         (
@@ -193,7 +201,7 @@ function findWinningOption(event, result) {
     }
 
     // ========================================
-    // 2+ / 3+ STYLE GOAL OPTIONS
+    // 2+ / 3+ STYLE GOALS
     // ========================================
 
     const overGoalMatch =
@@ -202,7 +210,6 @@ function findWinningOption(event, result) {
       );
 
     if (overGoalMatch) {
-
       const team =
         overGoalMatch[1].trim();
 
@@ -239,7 +246,6 @@ function findWinningOption(event, result) {
 // ==========================================
 
 async function closeFootballMarket(event) {
-
   if (
     !event ||
     event.status !== "active"
@@ -247,7 +253,8 @@ async function closeFootballMarket(event) {
     return false;
   }
 
-  event.status = "in_progress";
+  event.status =
+    "in_progress";
 
   event.predictionsClosedAt =
     Date.now();
@@ -256,10 +263,11 @@ async function closeFootballMarket(event) {
     event.resolution || {};
 
   event.resolution.type =
-    event.resolution.type || "automatic";
+    event.resolution.type ||
+    "automatic";
 
   event.resolution.source =
-    "API-Football";
+    "football-data.org";
 
   await save();
 
@@ -275,7 +283,6 @@ async function closeFootballMarket(event) {
 // ==========================================
 
 async function autoResolveFootballMarket(eventId) {
-
   await db.read();
 
   const event =
@@ -298,34 +305,58 @@ async function autoResolveFootballMarket(eventId) {
     return {
       success: false,
       resolved: false,
-      message: "Market is no longer active."
+      message:
+        "Market is no longer active."
     };
   }
 
-  if (!event.fixtureId) {
+  // ========================================
+  // FOOTBALL-DATA.ORG FIXTURE VALIDATION
+  // ========================================
+
+  const footballFixture =
+    event.footballFixture;
+
+  if (
+    !footballFixture ||
+    !footballFixture.id ||
+    footballFixture.provider !==
+      "football-data.org"
+  ) {
     return {
       success: false,
       resolved: false,
       message:
-        "This market does not have an API-Football fixture ID."
+        "This market does not have a valid football-data.org fixture."
+    };
+  }
+
+  const fixtureId =
+    Number(footballFixture.id);
+
+  if (!Number.isInteger(fixtureId)) {
+    return {
+      success: false,
+      resolved: false,
+      message:
+        "The football-data.org fixture ID is invalid."
     };
   }
 
   console.log(
-    `⚽ Checking fixture ${event.fixtureId} for market ${event.id}`
+    `⚽ Checking football-data.org fixture ${fixtureId} for market ${event.id}`
   );
 
   const result =
-    await getFixtureResult(
-      event.fixtureId
-    );
+    await getMatchResult(fixtureId);
 
   if (!result.found) {
     return {
       success: false,
       resolved: false,
       message:
-        "Football fixture was not found."
+        "Football-data.org fixture was not found.",
+      fixtureId
     };
   }
 
@@ -338,63 +369,78 @@ async function autoResolveFootballMarket(eventId) {
     !result.finished &&
     event.status === "active"
   ) {
-
     await closeFootballMarket(event);
 
     return {
       success: true,
       resolved: false,
       predictionsClosed: true,
+
       message:
         `Predictions closed. Match is now in progress (${result.status}).`,
-      fixtureId: event.fixtureId,
-      footballStatus: result.status
+
+      fixtureId,
+      footballStatus:
+        result.status
     };
   }
 
   // ========================================
-  // MATCH NOT STARTED YET
+  // MATCH NOT STARTED
   // ========================================
 
   if (
     !result.started &&
     !result.finished
   ) {
-
     return {
       success: true,
       resolved: false,
       predictionsClosed: false,
+
       message:
         `Match has not started yet. Status: ${result.status}`,
-      fixtureId: event.fixtureId,
-      footballStatus: result.status
+
+      fixtureId,
+      footballStatus:
+        result.status
     };
   }
 
   // ========================================
-  // MATCH FINISHED
+  // MATCH NOT FINISHED
   // ========================================
 
   if (!result.finished) {
-
     return {
       success: true,
       resolved: false,
+
       predictionsClosed:
         event.status === "in_progress",
+
       message:
         `Match is still in progress. Status: ${result.status}`,
-      fixtureId: event.fixtureId,
-      footballStatus: result.status
+
+      fixtureId,
+      footballStatus:
+        result.status
     };
   }
 
-  // If the market somehow remained active until FT,
-  // close it before resolving.
-  if (event.status === "active") {
+  // ========================================
+  // SAFETY: CLOSE IF STILL ACTIVE
+  // ========================================
+
+  if (
+    event.status === "active"
+  ) {
     await closeFootballMarket(event);
   }
+
+  // ========================================
+  // DETERMINE WINNING OPTION
+  // ========================================
 
   const winningOption =
     findWinningOption(
@@ -402,21 +448,33 @@ async function autoResolveFootballMarket(eventId) {
       result
     );
 
-  if (winningOption === null) {
+  if (
+    winningOption === null
+  ) {
+    console.error(
+      `❌ Could not match football-data.org result to market ${event.id}.`
+    );
 
     return {
       success: false,
       resolved: false,
+
       message:
         "The real match result could not be matched to this market's options.",
-      fixtureId: event.fixtureId,
-      footballStatus: result.status
+
+      fixtureId,
+      footballStatus:
+        result.status
     };
   }
 
   console.log(
-    `🏆 Fixture ${event.fixtureId} resolved market ${event.id} with option ${winningOption}`
+    `🏆 Football-data.org fixture ${fixtureId} resolved market ${event.id} with option ${winningOption}`
   );
+
+  // ========================================
+  // EXISTING PHX SETTLEMENT ENGINE
+  // ========================================
 
   const resolution =
     await resolveEvent(
@@ -424,7 +482,7 @@ async function autoResolveFootballMarket(eventId) {
       winningOption,
       {
         type: "automatic",
-        source: "API-Football"
+        source: "football-data.org"
       }
     );
 
@@ -437,9 +495,14 @@ async function autoResolveFootballMarket(eventId) {
 
   return {
     ...resolution,
+
     resolved: true,
-    fixtureId: event.fixtureId,
-    footballStatus: result.status,
+
+    fixtureId,
+
+    footballStatus:
+      result.status,
+
     winningOption
   };
 }
@@ -449,7 +512,6 @@ async function autoResolveFootballMarket(eventId) {
 // ==========================================
 
 async function autoResolveFootballMarkets() {
-
   await db.read();
 
   const footballMarkets =
@@ -459,19 +521,22 @@ async function autoResolveFootballMarkets() {
           event.status === "active" ||
           event.status === "in_progress"
         ) &&
-        event.fixtureId
+        event.footballFixture &&
+        event.footballFixture.id &&
+        event.footballFixture.provider ===
+          "football-data.org"
     );
 
   console.log(
-    `⚽ Automatic football resolver found ${footballMarkets.length} market(s).`
+    `⚽ Automatic football resolver found ${footballMarkets.length} football-data.org market(s).`
   );
 
   const results = [];
 
-  for (const event of footballMarkets) {
-
+  for (
+    const event of footballMarkets
+  ) {
     try {
-
       const result =
         await autoResolveFootballMarket(
           event.id
@@ -481,9 +546,7 @@ async function autoResolveFootballMarkets() {
         eventId: event.id,
         ...result
       });
-
     } catch (error) {
-
       console.error(
         `❌ Automatic football processing failed for ${event.id}:`,
         error.message
@@ -493,6 +556,7 @@ async function autoResolveFootballMarkets() {
         eventId: event.id,
         success: false,
         resolved: false,
+        predictionsClosed: false,
         message: error.message
       });
     }

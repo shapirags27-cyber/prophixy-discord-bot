@@ -38,8 +38,12 @@ const { handleVote, handleStakeSubmit } = require("./interactions/vote");
 const { resolveMarket } = require("./commands/resolve");
 const { autoResolveFootballMarkets } = require("./services/autoResolveFootball");
 const { autoCloseExpiredMarkets } = require("./services/autoCloseExpiredMarkets");
-const { getFixtureResult } = require("./services/apiFootball");
+const {
+  getMatch,
+  getMatchResult
+} = require("./services/footballData");
 const { generateMarkets } = require("./services/aiMarketGenerator");
+const { resolveAIFootballSubject } = require("./services/aiFootballResolver");
 const {
   getLeaderboard,
   getInviteLeaderboard,
@@ -799,6 +803,96 @@ ${user.sbt?.role || "Not Verified"}`
         `🤖 AI market selected: index ${selectedIndex} by ${interaction.user.tag}`
       );
 
+      // =====================================================
+      // FOOTBALL MARKETS
+      // =====================================================
+      // Football markets are controlled by the verified
+      // football-data.org fixture. They MUST NOT use the
+      // generic duration modal.
+      //
+      // The actual creator checks, fee charging and event
+      // creation remain in the existing submission flow.
+      // =====================================================
+
+      const footballFixture =
+        pending.realWorldData?.fixture || null;
+
+      const isFootballMarket =
+        String(
+          selectedMarket.category ||
+          pending.category ||
+          ""
+        ).toLowerCase() === "sports" &&
+        pending.realWorldData?.sport === "football" &&
+        footballFixture &&
+        footballFixture.externalFixtureId &&
+        footballFixture.externalFixtureProvider ===
+          "football-data.org";
+
+      if (isFootballMarket) {
+
+        console.log(
+          `⚽ Verified football market selected: ` +
+          `${footballFixture.homeTeam} vs ` +
+          `${footballFixture.awayTeam} ` +
+          `(fixture ${footballFixture.externalFixtureId})`
+        );
+
+        // Football creation continues through the existing
+        // AI duration submission handler, but with a hidden
+        // marker instead of a user-controlled duration.
+        const footballModal =
+          new ModalBuilder()
+            .setCustomId(
+              `ai_market_duration_${interaction.user.id}`
+            )
+            .setTitle(
+              "Confirm Football Market"
+            );
+
+        const confirmInput =
+          new TextInputBuilder()
+            .setCustomId(
+              "duration"
+            )
+            .setLabel(
+              "Football fixture"
+            )
+            .setPlaceholder(
+              `${footballFixture.homeTeam} vs ${footballFixture.awayTeam}`
+            )
+            .setValue(
+              "FIXTURE_KICKOFF"
+            )
+            .setStyle(
+              TextInputStyle.Short
+            )
+            .setRequired(true)
+            .setMaxLength(16);
+
+        const confirmRow =
+          new ActionRowBuilder()
+            .addComponents(
+              confirmInput
+            );
+
+        footballModal.addComponents(
+          confirmRow
+        );
+
+        await interaction.showModal(
+          footballModal
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // NON-FOOTBALL AI MARKETS
+      // =====================================================
+      // Existing duration behavior remains unchanged.
+      // =====================================================
+
       const durationModal =
         new ModalBuilder()
           .setCustomId(
@@ -994,59 +1088,143 @@ ${user.sbt?.role || "Not Verified"}`
         }
 
         // =================================================
-        // DURATION
+        // DETERMINE MARKET LIFECYCLE
+        // =================================================
+        // Football markets are controlled by the verified
+        // football-data.org fixture kickoff.
+        //
+        // Non-football markets continue using the creator
+        // supplied duration.
         // =================================================
 
-        const duration =
+        const submittedDuration =
           interaction.fields.getTextInputValue(
             "duration"
           ).trim();
 
-        const match =
-          duration.match(
-            /^(\d+)(m|h|d|w)$/i
+        const footballFixture =
+          pending.realWorldData?.fixture || null;
+
+        const isFootballMarket =
+          String(
+            selectedMarket.category ||
+            pending.category ||
+            ""
+          ).toLowerCase() === "sports" &&
+          pending.realWorldData?.sport === "football" &&
+          footballFixture &&
+          footballFixture.externalFixtureId &&
+          footballFixture.externalFixtureProvider ===
+            "football-data.org";
+
+        let duration = submittedDuration;
+        let marketEndsAt;
+        let eventFootballFixture = null;
+
+        if (isFootballMarket) {
+
+          const kickoffTimestamp =
+            Number(
+              footballFixture.kickoffTimestamp
+            );
+
+          if (
+            !Number.isFinite(kickoffTimestamp) ||
+            kickoffTimestamp <= 0
+          ) {
+
+            return interaction.editReply({
+              content:
+                "❌ **Invalid football fixture kickoff.**\n\n" +
+                "The verified football-data.org fixture does not contain a valid kickoff time. " +
+                "The market was not created."
+            });
+
+          }
+
+          if (
+            kickoffTimestamp <= Date.now()
+          ) {
+
+            return interaction.editReply({
+              content:
+                "❌ **This football fixture has already started.**\n\n" +
+                "The market cannot be created because predictions must close before kickoff."
+            });
+
+          }
+
+          marketEndsAt =
+            kickoffTimestamp;
+
+          eventFootballFixture =
+            footballFixture;
+
+          duration =
+            `Kickoff: ${new Date(
+              kickoffTimestamp
+            ).toISOString()}`;
+
+          console.log(
+            `⚽ Football market lifecycle locked to fixture kickoff: ` +
+            `${new Date(kickoffTimestamp).toISOString()}`
           );
 
-        if (!match) {
+        } else {
 
-          return interaction.editReply({
-            content:
-              "❌ Invalid duration.\n\n" +
-              "Examples: `30m`, `2h`, `3d`, `1w`"
-          });
+          // =================================================
+          // NON-FOOTBALL DURATION
+          // =================================================
 
-        }
+          const match =
+            submittedDuration.match(
+              /^(\d+)(m|h|d|w)$/i
+            );
 
-        const amount =
-          Number(match[1]);
+          if (!match) {
 
-        const unit =
-          match[2].toLowerCase();
+            return interaction.editReply({
+              content:
+                "❌ Invalid duration.\n\n" +
+                "Examples: `30m`, `2h`, `3d`, `1w`"
+            });
 
-        let milliseconds = 0;
+          }
 
-        switch (unit) {
+          const amount =
+            Number(match[1]);
 
-          case "m":
-            milliseconds =
-              amount * 60 * 1000;
-            break;
+          const unit =
+            match[2].toLowerCase();
 
-          case "h":
-            milliseconds =
-              amount * 60 * 60 * 1000;
-            break;
+          let milliseconds = 0;
 
-          case "d":
-            milliseconds =
-              amount * 24 * 60 * 60 * 1000;
-            break;
+          switch (unit) {
 
-          case "w":
-            milliseconds =
-              amount * 7 * 24 * 60 * 60 * 1000;
-            break;
+            case "m":
+              milliseconds =
+                amount * 60 * 1000;
+              break;
 
+            case "h":
+              milliseconds =
+                amount * 60 * 60 * 1000;
+              break;
+
+            case "d":
+              milliseconds =
+                amount * 24 * 60 * 60 * 1000;
+              break;
+
+            case "w":
+              milliseconds =
+                amount * 7 * 24 * 60 * 60 * 1000;
+              break;
+
+          }
+
+          marketEndsAt =
+            Date.now() + milliseconds;
         }
 
         // =================================================
@@ -1058,9 +1236,9 @@ ${user.sbt?.role || "Not Verified"}`
             selectedMarket.category || pending.category,
             selectedMarket.question,
             selectedMarket.options,
-            Date.now() + milliseconds,
+            marketEndsAt,
             ownerId,
-            null
+            eventFootballFixture
           );
 
         // =================================================
@@ -1109,8 +1287,16 @@ ${user.sbt?.role || "Not Verified"}`
                 inline: true
               },
               {
-                name: "⏳ Duration",
-                value: duration,
+                name:
+                  isFootballMarket
+                    ? "⚽ Kickoff"
+                    : "⏳ Duration",
+                value:
+                  isFootballMarket
+                    ? new Date(
+                        marketEndsAt
+                      ).toISOString()
+                    : duration,
                 inline: true
               },
               {
@@ -2138,10 +2324,51 @@ ${user.sbt?.role || "Not Verified"}`
           `🤖 AI market generation requested: ${category} / ${subject}`
         );
 
+        // =====================================================
+        // REAL-WORLD FOOTBALL CONTEXT
+        // =====================================================
+        // When the user asks about a football team's next game,
+        // resolve the actual fixture through football-data.org
+        // BEFORE asking Gemini to generate markets.
+        let realWorldData = {};
+
+        if (category === "sports") {
+          const footballResult =
+            await resolveAIFootballSubject(subject);
+
+          if (footballResult.resolved) {
+            realWorldData = {
+              sport: "football",
+              team: footballResult.team,
+              fixture: footballResult.fixture
+            };
+
+            console.log(
+              `⚽ AI football context attached: ` +
+              `${footballResult.fixture.homeTeam} vs ` +
+              `${footballResult.fixture.awayTeam}`
+            );
+          } else {
+            console.log(
+              `⚠️ AI football resolver did not resolve the subject: ` +
+              footballResult.reason
+            );
+
+            return interaction.editReply({
+              content:
+                "❌ **I couldn't resolve the football fixture.**\\n\\n" +
+                `${footballResult.reason}\\n\\n` +
+                "Please include the team name and try again. " +
+                "I won't invent a fixture or generate a market without verified football data."
+            });
+          }
+        }
+
         const markets =
           await generateMarkets({
             category,
-            subject
+            subject,
+            data: realWorldData
           });
 
         if (
@@ -2170,6 +2397,11 @@ ${user.sbt?.role || "Not Verified"}`
             category,
             subject,
             markets: limitedMarkets,
+
+            // Preserve the verified real-world fixture
+            // through the creator selection step.
+            realWorldData,
+
             createdAt: Date.now()
           }
         );
@@ -2395,192 +2627,252 @@ ${user.sbt?.role || "Not Verified"}`
         );
 
       // =====================================================
-      // FOOTBALL MARKET REQUIREMENT
+      // FOOTBALL-DATA.ORG MARKET VALIDATION
       // =====================================================
 
-      if (category === "sports" && !fixtureId) {
-        return interaction.editReply({
-          content:
-            "❌ **Sports markets require a football fixture ID.**\\n\\n" +
-            "Please provide the `fixtureid` from API-Football."
-        });
-      }
+      let footballFixture = null;
 
+      if (category === "sports") {
 
-      const match =
-        duration.match(
-          /^(\d+)(m|h|d|w)$/i
-        );
+        if (!fixtureId) {
+          return interaction.editReply({
+            content:
+              "❌ **Sports markets require a football-data.org match ID.**\n\n" +
+              "Please provide the `fixtureid` from football-data.org."
+          });
+        }
 
-
-      if (!match) {
-
-        return interaction.editReply({
-          content:
-            "❌ Invalid duration.\nExamples: `30m`, `2h`, `3d`, `1w`"
-        });
-
-      }
-
-
-      const amount =
-        Number(match[1]);
-
-      const unit =
-        match[2].toLowerCase();
-
-      let milliseconds = 0;
-
-
-      switch (unit) {
-
-        case "m":
-          milliseconds =
-            amount * 60 * 1000;
-          break;
-
-        case "h":
-          milliseconds =
-            amount * 60 * 60 * 1000;
-          break;
-
-        case "d":
-          milliseconds =
-            amount * 24 * 60 * 60 * 1000;
-          break;
-
-        case "w":
-          milliseconds =
-            amount * 7 * 24 * 60 * 60 * 1000;
-          break;
-
-      }
-
-
-      // =====================================================
-      // API-FOOTBALL FIXTURE VALIDATION
-      // =====================================================
-
-      let footballKickoffTimestamp = null;
-      //
-      // A fixture ID is optional for existing non-football
-      // markets. When supplied, however, it must be a valid
-      // upcoming API-Football fixture.
-      //
-      // IMPORTANT:
-      // Validate BEFORE creating the market or charging PHX.
-      // =====================================================
-
-      if (fixtureId) {
-
-        const numericFixtureId = Number(fixtureId);
+        const numericFixtureId =
+          Number(fixtureId);
 
         if (
           !Number.isInteger(numericFixtureId) ||
           numericFixtureId <= 0
         ) {
-
           return interaction.editReply({
             content:
-              "❌ **Invalid football fixture ID.**\\n\\n" +
-              "Please provide a valid API-Football fixture ID."
+              "❌ **Invalid football-data.org match ID.**\n\n" +
+              "Please provide a valid football-data.org match ID."
           });
-
         }
 
         try {
 
           const footballStatus =
-            await getFixtureResult(numericFixtureId);
+            await getMatchResult(
+              numericFixtureId
+            );
 
           if (!footballStatus.found) {
-
             return interaction.editReply({
               content:
-                "❌ **Football fixture not found.**\\n\\n" +
-                `API-Football could not find fixture **${numericFixtureId}**.\\n` +
-                "Please check the fixture ID and try again."
+                "❌ **Football match not found.**\n\n" +
+                `football-data.org could not find match **${numericFixtureId}**.\n` +
+                "Please check the match ID and try again."
             });
-
           }
 
           if (footballStatus.finished) {
-
             return interaction.editReply({
               content:
-                "❌ **This football match has already finished.**\\n\\n" +
-                "A prediction market cannot be created for a completed fixture."
+                "❌ **This football match has already finished.**\n\n" +
+                "A prediction market cannot be created for a completed match."
             });
-
           }
 
           if (footballStatus.started) {
-
             return interaction.editReply({
               content:
-                "❌ **This football match has already started.**\\n\\n" +
+                "❌ **This football match has already started.**\n\n" +
                 "Predictions must be created before kickoff."
             });
-
           }
 
-          footballKickoffTimestamp =
-            footballStatus.kickoffTimestamp || null;
+          const matchData =
+            await getMatch(
+              numericFixtureId
+            );
 
-          if (
-            !footballKickoffTimestamp ||
-            !Number.isFinite(footballKickoffTimestamp)
-          ) {
+          if (!matchData) {
             return interaction.editReply({
               content:
-                "❌ **Football fixture has no valid kickoff time.**\\n\\n" +
+                "❌ **Football match could not be loaded.**\n\n" +
                 "The market was not created and no PHX was charged."
             });
           }
 
+          const kickoffTimestamp =
+            Date.parse(
+              matchData.utcDate
+            );
+
+          if (
+            !Number.isFinite(kickoffTimestamp) ||
+            kickoffTimestamp <= 0
+          ) {
+            return interaction.editReply({
+              content:
+                "❌ **Football match has no valid kickoff time.**\n\n" +
+                "The market was not created and no PHX was charged."
+            });
+          }
+
+          if (
+            kickoffTimestamp <= Date.now()
+          ) {
+            return interaction.editReply({
+              content:
+                "❌ **This football match has already started.**\n\n" +
+                "Predictions must be created before kickoff."
+            });
+          }
+
+          footballFixture = {
+            externalFixtureId:
+              numericFixtureId,
+
+            externalFixtureProvider:
+              "football-data.org",
+
+            homeTeam:
+              matchData.homeTeam?.name ||
+              null,
+
+            awayTeam:
+              matchData.awayTeam?.name ||
+              null,
+
+            kickoff:
+              matchData.utcDate ||
+              null,
+
+            kickoffTimestamp,
+
+            competition:
+              matchData.competition?.name ||
+              null,
+
+            competitionCode:
+              matchData.competition?.code ||
+              null,
+
+            status:
+              matchData.status ||
+              null,
+
+            season:
+              matchData.season?.id ||
+              null
+          };
+
           console.log(
-            `✅ Valid upcoming API-Football fixture ${numericFixtureId} — ` +
-            `${footballStatus.status} — kickoff ${new Date(footballKickoffTimestamp).toISOString()}`
+            `✅ Valid football-data.org match ${numericFixtureId}: ` +
+            `${footballFixture.homeTeam} vs ${footballFixture.awayTeam}`
+          );
+
+          console.log(
+            `⚽ Football market kickoff locked to ` +
+            `${new Date(kickoffTimestamp).toISOString()}`
           );
 
         } catch (error) {
 
           console.error(
-            "❌ Football fixture validation failed:",
+            "❌ Football-data.org validation failed:",
             error.message
           );
 
           return interaction.editReply({
             content:
-              "⚠️ **Unable to verify the football fixture right now.**\\n\\n" +
-              "The market was **not created** and no PHX was charged.\\n" +
+              "⚠️ **Unable to verify the football match right now.**\n\n" +
+              "The market was **not created** and no PHX was charged.\n" +
               "Please try again shortly."
           });
-
         }
       }
+
+
+      // =====================================================
+      // MARKET DURATION
+      // =====================================================
+
+      let milliseconds = 0;
+
+      if (footballFixture) {
+
+        // Football markets always close at real kickoff.
+        milliseconds =
+          footballFixture.kickoffTimestamp -
+          Date.now();
+
+      } else {
+
+        const match =
+          duration.match(
+            /^(\d+)(m|h|d|w)$/i
+          );
+
+        if (!match) {
+          return interaction.editReply({
+            content:
+              "❌ Invalid duration.\nExamples: `30m`, `2h`, `3d`, `1w`"
+          });
+        }
+
+        const amount =
+          Number(match[1]);
+
+        const unit =
+          match[2].toLowerCase();
+
+        switch (unit) {
+
+          case "m":
+            milliseconds =
+              amount * 60 * 1000;
+            break;
+
+          case "h":
+            milliseconds =
+              amount * 60 * 60 * 1000;
+            break;
+
+          case "d":
+            milliseconds =
+              amount * 24 * 60 * 60 * 1000;
+            break;
+
+          case "w":
+            milliseconds =
+              amount * 7 * 24 * 60 * 60 * 1000;
+            break;
+        }
+      }
+
 
       // =====================================================
       // MARKET END TIME
       // =====================================================
-      // Football markets close at the real API-Football
-      // kickoff. Other markets retain their duration.
-      // =====================================================
 
       const marketEndsAt =
-        fixtureId && footballKickoffTimestamp
-          ? footballKickoffTimestamp
+        footballFixture
+          ? footballFixture.kickoffTimestamp
           : Date.now() + milliseconds;
+
+
+      // =====================================================
+      // CREATE MARKET
+      // =====================================================
 
       const event =
         await createEvent(
-            category,
-            question,
-            options,
-            marketEndsAt,
-            interaction.user.id,
-            fixtureId
-          );
+          category,
+          question,
+          options,
+          marketEndsAt,
+          interaction.user.id,
+          footballFixture
+        );
 
 
       // =====================================================

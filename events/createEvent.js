@@ -6,7 +6,7 @@ async function createEvent(
   options,
   endsAt,
   creatorId,
-  fixtureId = null
+  footballFixture = null
 ) {
   await db.read();
 
@@ -21,38 +21,55 @@ async function createEvent(
     // PHX MARKET ACCOUNTING
     // ==========================================
 
-    // Total PHX staked by all predictors
     pool: 0,
-
-    // PHX paid to the market creator at resolution
     creatorReward: 0,
-
-    // 97% of the pool distributed to winning predictors
     winnerPool: 0,
-
-    // 2% reserved for Prophixy
     reserveAmount: 0,
 
     creatorId,
 
     // ==========================================
-    // EXTERNAL FIXTURE
+    // EXTERNAL FOOTBALL FIXTURE
     // ==========================================
-    // Used for automatic real-world resolution.
-    // Currently supported: API-Football.
-    fixtureId:
-      fixtureId ? Number(fixtureId) : null,
+    // football-data.org is the authoritative
+    // source for AI football markets.
+    //
+    // Stored as metadata so the resolver does
+    // not confuse this ID with API-Football IDs.
+    footballFixture: footballFixture
+      ? {
+          id: Number(footballFixture.externalFixtureId),
+          provider:
+            footballFixture.externalFixtureProvider ||
+            "football-data.org",
 
+          homeTeam: footballFixture.homeTeam || null,
+          awayTeam: footballFixture.awayTeam || null,
+
+          kickoff: footballFixture.kickoff || null,
+          kickoffTimestamp:
+            Number(footballFixture.kickoffTimestamp) || null,
+
+          competition: footballFixture.competition || null,
+          competitionCode:
+            footballFixture.competitionCode || null,
+
+          status: footballFixture.status || null,
+          season: footballFixture.season || null
+        }
+      : null,
+
+    // Keep endsAt for compatibility with the existing
+    // market infrastructure. For football markets,
+    // this is the real football kickoff timestamp.
     endsAt,
 
     participants: 0,
 
-    // Discord message used for live market updates.
     channelId: null,
     messageId: null,
 
     status: "active",
-
     winner: null,
 
     resolution: {
