@@ -37,6 +37,8 @@ const { createEvent } = require("./events/createEvent");
 const { handleVote, handleStakeSubmit } = require("./interactions/vote");
 const { resolveMarket } = require("./commands/resolve");
 const { autoResolveFootballMarkets } = require("./services/autoResolveFootball");
+const { autoCloseExpiredMarkets } = require("./services/autoCloseExpiredMarkets");
+const { getFixtureResult } = require("./services/apiFootball");
 const { generateMarkets } = require("./services/aiMarketGenerator");
 const {
   getLeaderboard,
@@ -124,31 +126,55 @@ client.once(Events.ClientReady, async () => {
 
     try {
 
-      const results =
+      // ==========================================
+      // FOOTBALL MARKET LIFECYCLE
+      // ==========================================
+
+      const footballResults =
         await autoResolveFootballMarkets();
 
-      const closed =
-        results.filter(
+      const footballClosed =
+        footballResults.filter(
           r => r.predictionsClosed
         );
 
-      const resolved =
-        results.filter(
+      const footballResolved =
+        footballResults.filter(
           r => r.resolved
         );
 
-      if (closed.length > 0) {
+      if (footballClosed.length > 0) {
 
         console.log(
-          `🔴 Closed predictions for ${closed.length} football market(s).`
+          `🔴 Closed predictions for ${footballClosed.length} football market(s).`
         );
 
       }
 
-      if (resolved.length > 0) {
+      if (footballResolved.length > 0) {
 
         console.log(
-          `🏆 Automatically resolved ${resolved.length} football market(s).`
+          `🏆 Automatically resolved ${footballResolved.length} football market(s).`
+        );
+
+      }
+
+      // ==========================================
+      // NON-FOOTBALL MARKET EXPIRY
+      // ==========================================
+
+      const expiredResults =
+        await autoCloseExpiredMarkets();
+
+      const expiredClosed =
+        expiredResults.filter(
+          r => r.closed
+        );
+
+      if (expiredClosed.length > 0) {
+
+        console.log(
+          `⏱️ Automatically closed ${expiredClosed.length} expired non-football market(s).`
         );
 
       }
@@ -156,13 +182,13 @@ client.once(Events.ClientReady, async () => {
     } catch (error) {
 
       console.error(
-        "❌ Auto football resolver error:",
+        "❌ Automatic market lifecycle error:",
         error.message
       );
 
     }
 
-  }, 60 * 1000); // every 1 minute
+  }, 30 * 1000); // every 30 seconds
 
 });
 
@@ -1126,10 +1152,29 @@ ${user.sbt?.role || "Not Verified"}`
 
         if (interaction.channel) {
 
-          await interaction.channel.send({
-            embeds: [embed],
-            components: [row]
-          });
+          const marketMessage =
+            await interaction.channel.send({
+              embeds: [embed],
+              components: [row]
+            });
+
+          // Store the public Discord message so the
+          // market pool and participant count can be
+          // updated after each successful stake.
+          event.channelId =
+            marketMessage.channelId;
+
+          event.messageId =
+            marketMessage.id;
+
+          await save();
+
+          console.log(
+            "📊 AI MARKET MESSAGE TRACKED:",
+            event.id,
+            `channel=${event.channelId}`,
+            `message=${event.messageId}`
+          );
 
         }
 
@@ -1167,7 +1212,7 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.customId.startsWith("stake_")
     ) {
 
-      await handleStakeSubmit(interaction);
+      await handleStakeSubmit(interaction, client);
 
       return;
     }
@@ -2349,6 +2394,18 @@ ${user.sbt?.role || "Not Verified"}`
           "fixtureid"
         );
 
+      // =====================================================
+      // FOOTBALL MARKET REQUIREMENT
+      // =====================================================
+
+      if (category === "sports" && !fixtureId) {
+        return interaction.editReply({
+          content:
+            "❌ **Sports markets require a football fixture ID.**\\n\\n" +
+            "Please provide the `fixtureid` from API-Football."
+        });
+      }
+
 
       const match =
         duration.match(
@@ -2400,12 +2457,127 @@ ${user.sbt?.role || "Not Verified"}`
       }
 
 
+      // =====================================================
+      // API-FOOTBALL FIXTURE VALIDATION
+      // =====================================================
+
+      let footballKickoffTimestamp = null;
+      //
+      // A fixture ID is optional for existing non-football
+      // markets. When supplied, however, it must be a valid
+      // upcoming API-Football fixture.
+      //
+      // IMPORTANT:
+      // Validate BEFORE creating the market or charging PHX.
+      // =====================================================
+
+      if (fixtureId) {
+
+        const numericFixtureId = Number(fixtureId);
+
+        if (
+          !Number.isInteger(numericFixtureId) ||
+          numericFixtureId <= 0
+        ) {
+
+          return interaction.editReply({
+            content:
+              "❌ **Invalid football fixture ID.**\\n\\n" +
+              "Please provide a valid API-Football fixture ID."
+          });
+
+        }
+
+        try {
+
+          const footballStatus =
+            await getFixtureResult(numericFixtureId);
+
+          if (!footballStatus.found) {
+
+            return interaction.editReply({
+              content:
+                "❌ **Football fixture not found.**\\n\\n" +
+                `API-Football could not find fixture **${numericFixtureId}**.\\n` +
+                "Please check the fixture ID and try again."
+            });
+
+          }
+
+          if (footballStatus.finished) {
+
+            return interaction.editReply({
+              content:
+                "❌ **This football match has already finished.**\\n\\n" +
+                "A prediction market cannot be created for a completed fixture."
+            });
+
+          }
+
+          if (footballStatus.started) {
+
+            return interaction.editReply({
+              content:
+                "❌ **This football match has already started.**\\n\\n" +
+                "Predictions must be created before kickoff."
+            });
+
+          }
+
+          footballKickoffTimestamp =
+            footballStatus.kickoffTimestamp || null;
+
+          if (
+            !footballKickoffTimestamp ||
+            !Number.isFinite(footballKickoffTimestamp)
+          ) {
+            return interaction.editReply({
+              content:
+                "❌ **Football fixture has no valid kickoff time.**\\n\\n" +
+                "The market was not created and no PHX was charged."
+            });
+          }
+
+          console.log(
+            `✅ Valid upcoming API-Football fixture ${numericFixtureId} — ` +
+            `${footballStatus.status} — kickoff ${new Date(footballKickoffTimestamp).toISOString()}`
+          );
+
+        } catch (error) {
+
+          console.error(
+            "❌ Football fixture validation failed:",
+            error.message
+          );
+
+          return interaction.editReply({
+            content:
+              "⚠️ **Unable to verify the football fixture right now.**\\n\\n" +
+              "The market was **not created** and no PHX was charged.\\n" +
+              "Please try again shortly."
+          });
+
+        }
+      }
+
+      // =====================================================
+      // MARKET END TIME
+      // =====================================================
+      // Football markets close at the real API-Football
+      // kickoff. Other markets retain their duration.
+      // =====================================================
+
+      const marketEndsAt =
+        fixtureId && footballKickoffTimestamp
+          ? footballKickoffTimestamp
+          : Date.now() + milliseconds;
+
       const event =
         await createEvent(
             category,
             question,
             options,
-            Date.now() + milliseconds,
+            marketEndsAt,
             interaction.user.id,
             fixtureId
           );
@@ -2502,10 +2674,21 @@ ${user.sbt?.role || "Not Verified"}`
       );
 
 
-      await interaction.editReply({
-        embeds: [embed],
-        components: [row]
-      });
+      const marketMessage =
+        await interaction.editReply({
+          embeds: [embed],
+          components: [row]
+        });
+
+      // Store the public Discord message so its pool and
+      // participant count can be updated after each stake.
+      event.channelId =
+        marketMessage.channelId;
+
+      event.messageId =
+        marketMessage.id;
+
+      await save();
 
       return;
     }

@@ -47,6 +47,10 @@ async function createEvent(
 
     participants: 0,
 
+    // Discord message used for live market updates.
+    channelId: null,
+    messageId: null,
+
     status: "active",
 
     winner: null,

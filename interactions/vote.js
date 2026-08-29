@@ -9,7 +9,8 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ActionRowBuilder
+  ActionRowBuilder,
+  EmbedBuilder
 } = require("discord.js");
 
 const MIN_STAKE = 100;
@@ -221,7 +222,7 @@ async function handleVote(interaction) {
 // STAKE MODAL SUBMISSION
 // ==========================================
 
-async function handleStakeSubmit(interaction) {
+async function handleStakeSubmit(interaction, client) {
 
   console.log(
     "🎯 STAKE SUBMISSION RECEIVED:",
@@ -452,6 +453,106 @@ async function handleStakeSubmit(interaction) {
   await save();
 
   console.log("🎯 DATABASE SAVED SUCCESSFULLY");
+
+  // ==========================================
+  // UPDATE PUBLIC MARKET MESSAGE
+  // ==========================================
+
+  if (
+    client &&
+    event.channelId &&
+    event.messageId
+  ) {
+    try {
+
+      const channel =
+        await client.channels.fetch(
+          event.channelId
+        );
+
+      if (
+        channel &&
+        channel.isTextBased()
+      ) {
+
+        const marketMessage =
+          await channel.messages.fetch(
+            event.messageId
+          );
+
+        if (
+          marketMessage &&
+          marketMessage.embeds.length > 0
+        ) {
+
+          const oldEmbed =
+            marketMessage.embeds[0];
+
+          const updatedEmbed =
+            EmbedBuilder.from(oldEmbed)
+              .spliceFields(
+                0,
+                oldEmbed.fields.length,
+                ...oldEmbed.fields.map(field => {
+
+                  if (
+                    field.name === "🏦 Market Pool"
+                  ) {
+                    return {
+                      name: field.name,
+                      value:
+                        `${event.pool.toLocaleString()} PHX`,
+                      inline: field.inline
+                    };
+                  }
+
+                  if (
+                    field.name === "👥 Participants"
+                  ) {
+                    return {
+                      name: field.name,
+                      value:
+                        String(event.participants),
+                      inline: field.inline
+                    };
+                  }
+
+                  return {
+                    name: field.name,
+                    value: field.value,
+                    inline: field.inline
+                  };
+
+                })
+              );
+
+            await marketMessage.edit({
+              embeds: [updatedEmbed]
+            });
+
+            console.log(
+              "📊 PUBLIC MARKET MESSAGE UPDATED:",
+              event.id,
+              `pool=${event.pool}`,
+              `participants=${event.participants}`
+            );
+
+        }
+
+      }
+
+    } catch (error) {
+
+      // The stake has already been saved successfully.
+      // A Discord message update failure must not
+      // reverse or invalidate the user's prediction.
+      console.error(
+        "⚠️ Failed to update public market message:",
+        error.message
+      );
+
+    }
+  }
 
   // ==========================================
   // CONFIRMATION

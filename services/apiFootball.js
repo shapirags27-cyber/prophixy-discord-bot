@@ -110,6 +110,75 @@ async function getFixtures({
 }
 
 // ==========================================
+// GET NEXT FIXTURE FOR A TEAM
+// ==========================================
+// API-Football Free plans do not support the
+// `next` parameter, so we search upcoming dates
+// using the supported `date` parameter.
+
+async function getNextFixtureByTeam(teamId, {
+  days = 14
+} = {}) {
+
+  if (!teamId) {
+    throw new Error("Team ID is required.");
+  }
+
+  const numericTeamId = Number(teamId);
+
+  if (!Number.isInteger(numericTeamId)) {
+    throw new Error("Team ID must be an integer.");
+  }
+
+  const today = new Date();
+
+  for (let offset = 0; offset <= days; offset++) {
+
+    const date = new Date(today);
+
+    date.setDate(
+      today.getDate() + offset
+    );
+
+    const dateString =
+      date.toISOString().slice(0, 10);
+
+    const fixtures =
+      await getFixtures({
+        team: numericTeamId,
+        date: dateString
+      });
+
+    const futureFixtures =
+      fixtures
+        .filter(fixture => {
+
+          const timestamp =
+            Number(
+              fixture.fixture?.timestamp || 0
+            ) * 1000;
+
+          return (
+            timestamp > Date.now() &&
+            fixture.fixture?.id
+          );
+
+        })
+        .sort(
+          (a, b) =>
+            Number(a.fixture.timestamp) -
+            Number(b.fixture.timestamp)
+        );
+
+    if (futureFixtures.length > 0) {
+      return futureFixtures[0];
+    }
+  }
+
+  return null;
+}
+
+// ==========================================
 // GET FIXTURE RESULT
 // ==========================================
 
@@ -226,6 +295,7 @@ function getMatchWinner(fixture) {
 module.exports = {
   getFixture,
   getFixtures,
+  getNextFixtureByTeam,
   getFixtureResult,
   getMatchWinner
 };
