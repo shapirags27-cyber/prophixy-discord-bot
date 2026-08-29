@@ -21,6 +21,7 @@ const {
   initDB,
   getUser,
   createUser,
+  updateUser,
   save,
   getMarketsCreatedToday,
 } = require("./services/database");
@@ -839,7 +840,7 @@ ${user.sbt?.role || "Not Verified"}`
         const footballModal =
           new ModalBuilder()
             .setCustomId(
-              `ai_market_duration_${interaction.user.id}`
+              `ai_football_confirm_${interaction.user.id}`
             )
             .setTitle(
               "Confirm Football Market"
@@ -848,22 +849,22 @@ ${user.sbt?.role || "Not Verified"}`
         const confirmInput =
           new TextInputBuilder()
             .setCustomId(
-              "duration"
+              "confirm"
             )
             .setLabel(
-              "Football fixture"
+              "Confirm football market"
             )
             .setPlaceholder(
               `${footballFixture.homeTeam} vs ${footballFixture.awayTeam}`
             )
             .setValue(
-              "FIXTURE_KICKOFF"
+              "CONFIRM"
             )
             .setStyle(
               TextInputStyle.Short
             )
             .setRequired(true)
-            .setMaxLength(16);
+            .setMaxLength(7);
 
         const confirmRow =
           new ActionRowBuilder()
@@ -950,7 +951,10 @@ ${user.sbt?.role || "Not Verified"}`
 
     if (
       interaction.isModalSubmit() &&
-      interaction.customId.startsWith("ai_market_duration_")
+      (
+        interaction.customId.startsWith("ai_market_duration_") ||
+        interaction.customId.startsWith("ai_football_confirm_")
+      )
     ) {
 
       await interaction.deferReply({
@@ -960,10 +964,9 @@ ${user.sbt?.role || "Not Verified"}`
       try {
 
         const ownerId =
-          interaction.customId.replace(
-            "ai_market_duration_",
-            ""
-          );
+          interaction.customId
+            .replace("ai_market_duration_", "")
+            .replace("ai_football_confirm_", "");
 
         // Security: only the creator who generated the AI
         // suggestions can complete this market.
@@ -1092,27 +1095,31 @@ ${user.sbt?.role || "Not Verified"}`
         // supplied duration.
         // =================================================
 
-        const submittedDuration =
-          interaction.fields.getTextInputValue(
-            "duration"
-          ).trim();
+        const isFootballConfirmation =
+          interaction.customId.startsWith(
+            "ai_football_confirm_"
+          );
+
+        let submittedDuration = "";
+
+        if (!isFootballConfirmation) {
+          submittedDuration =
+            interaction.fields.getTextInputValue(
+              "duration"
+            ).trim();
+        }
 
         const footballFixture =
           pending.realWorldData?.fixture || null;
 
         const isFootballMarket =
-          String(
-            selectedMarket.category ||
-            pending.category ||
-            ""
-          ).toLowerCase() === "sports" &&
           pending.realWorldData?.sport === "football" &&
           footballFixture &&
-          footballFixture.externalFixtureId &&
+          Number(footballFixture.externalFixtureId) > 0 &&
           footballFixture.externalFixtureProvider ===
             "football-data.org";
 
-        let duration = submittedDuration;
+        let duration = "";
         let marketEndsAt;
         let eventFootballFixture = null;
 
@@ -1155,10 +1162,9 @@ ${user.sbt?.role || "Not Verified"}`
           eventFootballFixture =
             footballFixture;
 
-          duration =
-            `Kickoff: ${new Date(
-              kickoffTimestamp
-            ).toISOString()}`;
+          // Football markets have NO creator-supplied duration.
+          // Their closing time is the verified fixture kickoff.
+          duration = "";
 
           console.log(
             `⚽ Football market lifecycle locked to fixture kickoff: ` +
@@ -1240,14 +1246,35 @@ ${user.sbt?.role || "Not Verified"}`
         // CHARGE FEE ONLY AFTER SUCCESSFUL CREATION
         // =================================================
 
-        creatorUser.phx =
-          creatorBalance -
-          MARKET_CREATION_FEE;
+        // createEvent() performs its own db.read(), so the
+        // original creatorUser object may reference stale data.
+        // Persist the deduction through updateUser().
 
-        await save();
+        const newCreatorBalance =
+          creatorBalance - MARKET_CREATION_FEE;
+
+        const updatedCreator =
+          await updateUser({
+            ...creatorUser,
+            phx: newCreatorBalance
+          });
+
+        if (!updatedCreator) {
+
+          console.error(
+            `❌ Failed to persist ${MARKET_CREATION_FEE} PHX fee deduction for ${ownerId}`
+          );
+
+          return interaction.editReply({
+            content:
+              "⚠️ The market was created, but the creator balance could not be updated. Please contact support."
+          });
+
+        }
 
         console.log(
-          `💰 Charged ${MARKET_CREATION_FEE} PHX AI market creation fee from ${interaction.user.tag}`
+          `💰 Charged ${MARKET_CREATION_FEE} PHX AI market creation fee from ${interaction.user.tag}. ` +
+          `Balance: ${creatorBalance} → ${newCreatorBalance}`
         );
 
         // =================================================
