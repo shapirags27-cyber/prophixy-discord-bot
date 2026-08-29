@@ -889,6 +889,7 @@ ${user.sbt?.role || "Not Verified"}`
       // Existing duration behavior remains unchanged.
       // =====================================================
 
+      // Non-football AI markets continue using the duration modal.
       const durationModal =
         new ModalBuilder()
           .setCustomId(
@@ -946,7 +947,7 @@ ${user.sbt?.role || "Not Verified"}`
     );
 
     // =====================================================
-    // AI MARKET DURATION SUBMISSION
+    // AI MARKET SUBMISSION
     // =====================================================
 
     if (
@@ -967,6 +968,21 @@ ${user.sbt?.role || "Not Verified"}`
           interaction.customId
             .replace("ai_market_duration_", "")
             .replace("ai_football_confirm_", "");
+
+        // Football confirmation requires an explicit confirmation.
+        if (
+          interaction.customId.startsWith("ai_football_confirm_")
+        ) {
+          const confirmation =
+            interaction.fields.getTextInputValue("confirm").trim();
+
+          if (confirmation.toUpperCase() !== "CONFIRM") {
+            return interaction.editReply({
+              content:
+                "❌ Please enter `CONFIRM` to create this football market."
+            });
+          }
+        }
 
         // Security: only the creator who generated the AI
         // suggestions can complete this market.
@@ -1100,6 +1116,8 @@ ${user.sbt?.role || "Not Verified"}`
             "ai_football_confirm_"
           );
 
+        // Football markets never request or read a creator-supplied duration.
+        // Their lifecycle is locked to the verified football-data.org kickoff.
         let submittedDuration = "";
 
         if (!isFootballConfirmation) {

@@ -110,14 +110,46 @@ async function getFixtures({
 }
 
 // ==========================================
+// SEARCH TEAMS BY NAME
+// ==========================================
+async function searchTeams(teamName) {
+  if (!teamName || !String(teamName).trim()) {
+    return [];
+  }
+
+  const client = getClient();
+
+  const response = await client.get("/teams", {
+    params: {
+      search: String(teamName).trim()
+    }
+  });
+
+  const errors = response.data?.errors || {};
+
+  if (Object.keys(errors).length > 0) {
+    console.error("❌ API-Football team search errors:", errors);
+  }
+
+  if (
+    !response.data ||
+    !Array.isArray(response.data.response)
+  ) {
+    return [];
+  }
+
+  return response.data.response;
+}
+
+// ==========================================
 // GET NEXT FIXTURE FOR A TEAM
 // ==========================================
-// API-Football Free plans do not support the
-// `next` parameter, so we search upcoming dates
-// using the supported `date` parameter.
-
+// Fetch the team's current-season fixtures in one request and
+// select the first fixture whose kickoff is still in the future.
+// This avoids repeated date requests and works with API-Football
+// plans that require the season parameter.
 async function getNextFixtureByTeam(teamId, {
-  days = 14
+  season = new Date().getUTCFullYear()
 } = {}) {
 
   if (!teamId) {
@@ -130,52 +162,70 @@ async function getNextFixtureByTeam(teamId, {
     throw new Error("Team ID must be an integer.");
   }
 
-  const today = new Date();
+  const numericSeason = Number(season);
 
-  for (let offset = 0; offset <= days; offset++) {
-
-    const date = new Date(today);
-
-    date.setDate(
-      today.getDate() + offset
-    );
-
-    const dateString =
-      date.toISOString().slice(0, 10);
-
-    const fixtures =
-      await getFixtures({
-        team: numericTeamId,
-        date: dateString
-      });
-
-    const futureFixtures =
-      fixtures
-        .filter(fixture => {
-
-          const timestamp =
-            Number(
-              fixture.fixture?.timestamp || 0
-            ) * 1000;
-
-          return (
-            timestamp > Date.now() &&
-            fixture.fixture?.id
-          );
-
-        })
-        .sort(
-          (a, b) =>
-            Number(a.fixture.timestamp) -
-            Number(b.fixture.timestamp)
-        );
-
-    if (futureFixtures.length > 0) {
-      return futureFixtures[0];
-    }
+  if (!Number.isInteger(numericSeason)) {
+    throw new Error("Season must be an integer.");
   }
 
-  return null;
+  const fixtures = await getFixtures({
+    team: numericTeamId,
+    season: numericSeason
+  });
+
+  const futureFixtures = fixtures
+    .filter(fixture => {
+      const kickoff =
+        Number(fixture.fixture?.timestamp || 0) * 1000;
+
+      return (
+        kickoff > Date.now() &&
+        fixture.fixture?.id
+      );
+    })
+    .sort(
+      (a, b) =>
+        Number(a.fixture.timestamp) -
+        Number(b.fixture.timestamp)
+    );
+
+  if (futureFixtures.length === 0) {
+    return null;
+  }
+
+  const fixture = futureFixtures[0];
+
+  return {
+    externalFixtureId:
+      fixture.fixture.id,
+
+    externalFixtureProvider:
+      "api-football",
+
+    homeTeam:
+      fixture.teams?.home?.name || null,
+
+    awayTeam:
+      fixture.teams?.away?.name || null,
+
+    kickoff:
+      fixture.fixture?.date || null,
+
+    kickoffTimestamp:
+      Number(fixture.fixture?.timestamp || 0) * 1000,
+
+    competition:
+      fixture.league?.name || null,
+
+    competitionCode:
+      fixture.league?.id || null,
+
+    status:
+      fixture.fixture?.status?.short || null,
+
+    season:
+      fixture.league?.season || numericSeason
+  };
 }
 
 // ==========================================
@@ -295,6 +345,7 @@ function getMatchWinner(fixture) {
 module.exports = {
   getFixture,
   getFixtures,
+  searchTeams,
   getNextFixtureByTeam,
   getFixtureResult,
   getMatchWinner

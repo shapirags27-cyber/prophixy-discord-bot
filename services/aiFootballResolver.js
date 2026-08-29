@@ -15,8 +15,19 @@ function extractTeamPhrase(subject) {
   const text = String(subject || "").trim();
 
   const patterns = [
+    // "Will Everton win?"
     /will\s+(.+?)\s+(?:win|lose|draw|score|keep|have|get|beat)\b/i,
+
+    // "Everton to win"
+    /^(.+?)\s+to\s+(?:win|lose|draw|score|keep|have|get|beat)\b/i,
+
+    // "Everton win their next match"
+    /^(.+?)\s+(?:win|lose|draw|score|keep|have|get|beat)\b/i,
+
+    // "Everton in their next match"
     /(.+?)\s+(?:in\s+)?their\s+next\s+(?:game|match|fixture)\b/i,
+
+    // "Everton next game"
     /(.+?)\s+next\s+(?:game|match|fixture)\b/i
   ];
 
