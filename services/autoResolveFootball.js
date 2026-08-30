@@ -40,10 +40,6 @@ function findWinningOption(event, result) {
   const winner =
     result.fixture.winner;
 
-  if (!winner) {
-    return null;
-  }
-
   const options =
     Array.isArray(event.options)
       ? event.options
@@ -65,9 +61,30 @@ function findWinningOption(event, result) {
   const awayGoals =
     result.fixture.goals?.away;
 
+  const halfTimeHomeGoals =
+    result.fixture.halfTime?.home;
+
+  const halfTimeAwayGoals =
+    result.fixture.halfTime?.away;
+
+  const hasFullTimeGoals =
+    Number.isFinite(Number(homeGoals)) &&
+    Number.isFinite(Number(awayGoals));
+
+  const hasHalfTimeGoals =
+    Number.isFinite(Number(halfTimeHomeGoals)) &&
+    Number.isFinite(Number(halfTimeAwayGoals));
+
   const totalGoals =
-    Number(homeGoals || 0) +
-    Number(awayGoals || 0);
+    hasFullTimeGoals
+      ? Number(homeGoals) + Number(awayGoals)
+      : null;
+
+  const halfTimeTotalGoals =
+    hasHalfTimeGoals
+      ? Number(halfTimeHomeGoals) +
+        Number(halfTimeAwayGoals)
+      : null;
 
   for (
     let i = 0;
@@ -122,6 +139,7 @@ function findWinningOption(event, result) {
     // ========================================
 
     if (
+      hasFullTimeGoals &&
       (
         option === "yes" ||
         option === "both teams score"
@@ -133,6 +151,7 @@ function findWinningOption(event, result) {
     }
 
     if (
+      hasFullTimeGoals &&
       (
         option === "no" ||
         option === "both teams do not score"
@@ -150,6 +169,7 @@ function findWinningOption(event, result) {
     // ========================================
 
     if (
+      hasFullTimeGoals &&
       option === "over 2.5 goals" &&
       totalGoals > 2.5
     ) {
@@ -157,8 +177,115 @@ function findWinningOption(event, result) {
     }
 
     if (
+      hasFullTimeGoals &&
       option === "under 2.5 goals" &&
       totalGoals < 2.5
+    ) {
+      return i;
+    }
+
+    // ========================================
+    // HALF-TIME WINNER
+    // ========================================
+
+    if (
+      hasHalfTimeGoals &&
+      (
+        option === "half time home" ||
+        option === "half-time home" ||
+        option === "half time home win" ||
+        option === "half-time home win" ||
+        option === `${homeTeam} half time` ||
+        option === `${homeTeam} half-time` ||
+        option === `${homeTeam} half time win` ||
+        option === `${homeTeam} half-time win`
+      ) &&
+      Number(halfTimeHomeGoals) >
+        Number(halfTimeAwayGoals)
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      (
+        option === "half time away" ||
+        option === "half-time away" ||
+        option === "half time away win" ||
+        option === "half-time away win" ||
+        option === `${awayTeam} half time` ||
+        option === `${awayTeam} half-time` ||
+        option === `${awayTeam} half time win` ||
+        option === `${awayTeam} half-time win`
+      ) &&
+      Number(halfTimeAwayGoals) >
+        Number(halfTimeHomeGoals)
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      (
+        option === "half time draw" ||
+        option === "half-time draw" ||
+        option === "half time tie" ||
+        option === "half-time tie"
+      ) &&
+      Number(halfTimeHomeGoals) ===
+        Number(halfTimeAwayGoals)
+    ) {
+      return i;
+    }
+
+    // ========================================
+    // FIRST-HALF TOTAL GOALS
+    // ========================================
+
+    if (
+      hasHalfTimeGoals &&
+      option === "over 0.5 first half goals" &&
+      halfTimeTotalGoals > 0.5
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      option === "under 0.5 first half goals" &&
+      halfTimeTotalGoals < 0.5
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      option === "over 1.5 first half goals" &&
+      halfTimeTotalGoals > 1.5
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      option === "under 1.5 first half goals" &&
+      halfTimeTotalGoals < 1.5
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      option === "over 2.5 first half goals" &&
+      halfTimeTotalGoals > 2.5
+    ) {
+      return i;
+    }
+
+    if (
+      hasHalfTimeGoals &&
+      option === "under 2.5 first half goals" &&
+      halfTimeTotalGoals < 2.5
     ) {
       return i;
     }
@@ -172,7 +299,10 @@ function findWinningOption(event, result) {
         /^(.*?)\s*(\d+)\s*(?:goals?)$/
       );
 
-    if (exactGoalMatch) {
+    if (
+      exactGoalMatch &&
+      hasFullTimeGoals
+    ) {
       const team =
         exactGoalMatch[1].trim();
 
@@ -201,7 +331,7 @@ function findWinningOption(event, result) {
     }
 
     // ========================================
-    // 2+ / 3+ STYLE GOALS
+    // 2+ / 3+ STYLE TEAM GOALS
     // ========================================
 
     const overGoalMatch =
@@ -209,7 +339,10 @@ function findWinningOption(event, result) {
         /^(.*?)\s*(\d+)\s*\+?\s*goals?$/
       );
 
-    if (overGoalMatch) {
+    if (
+      overGoalMatch &&
+      hasFullTimeGoals
+    ) {
       const team =
         overGoalMatch[1].trim();
 
@@ -240,7 +373,6 @@ function findWinningOption(event, result) {
 
   return null;
 }
-
 // ==========================================
 // CLOSE MARKET WHEN MATCH STARTS
 // ==========================================
