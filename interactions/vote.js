@@ -456,6 +456,15 @@ async function handleStakeSubmit(interaction, client) {
 
   // ==========================================
   // UPDATE PUBLIC MARKET MESSAGE
+
+    console.log(
+      "📊 PUBLIC MARKET UPDATE CHECK:",
+      event.id,
+      `channel=${event.channelId || "MISSING"}`,
+      `message=${event.messageId || "MISSING"}`,
+      `pool=${event.pool}`,
+      `participants=${event.participants}`
+    );
   // ==========================================
 
   if (
