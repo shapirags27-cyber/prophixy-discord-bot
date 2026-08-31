@@ -46,6 +46,22 @@ const {
 } = require("./services/footballData");
 const { generateMarkets } = require("./services/aiMarketGenerator");
 const { resolveAIFootballSubject } = require("./services/aiFootballResolver");
+
+const {
+  analyzeFootball,
+  analyzeCrypto
+} = require("./services/aiAnalysis");
+
+const {
+  getCryptoMarketData
+} = require("./services/cryptoMarketData");
+
+const {
+  getAIAnalysisConfig,
+  setAIAnalysisRoles,
+  clearAIAnalysisRoles,
+  canUseAIAnalysis
+} = require("./services/aiAnalysisConfig");
 const {
   getLeaderboard,
   getInviteLeaderboard,
@@ -330,6 +346,69 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // =====================================================
 
     if (interaction.isButton()) {
+
+      // =====================================================
+      // AI ANALYSIS BUTTON
+      // =====================================================
+
+      if (interaction.customId === "prophixy_ai_analysis") {
+
+        try {
+          const allowed = await canUseAIAnalysis(
+            interaction.member
+          );
+
+          if (!allowed) {
+            return interaction.reply({
+              content:
+                "❌ **You don't have access to AI Analysis.**\\n\\n" +
+                "Your server administrator must assign you an AI Analysis role before you can use this feature.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const row =
+            new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId("prophixy_ai_football")
+                  .setLabel("Football Analysis")
+                  .setEmoji("⚽")
+                  .setStyle(ButtonStyle.Primary),
+
+                new ButtonBuilder()
+                  .setCustomId("prophixy_ai_crypto")
+                  .setLabel("Crypto Analysis")
+                  .setEmoji("🪙")
+                  .setStyle(ButtonStyle.Success)
+              );
+
+          await interaction.reply({
+            content:
+              "🤖 **Prophixy AI Analysis**\\n\\n" +
+              "Choose what you want Prophixy AI to analyze:",
+            components: [row],
+            flags: MessageFlags.Ephemeral
+          });
+
+        } catch (error) {
+
+          console.error(
+            "❌ AI Analysis access error:",
+            error
+          );
+
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              content:
+                "❌ Unable to open AI Analysis right now.",
+              flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+          }
+        }
+
+        return;
+      }
 
       // =====================================================
       // PROFILE BUTTON
@@ -744,6 +823,129 @@ ${user.sbt?.role || "Not Verified"}`
 
 
     // =====================================================
+    // AI FOOTBALL ANALYSIS BUTTON
+    // =====================================================
+
+    if (interaction.isButton() &&
+        interaction.customId === "prophixy_ai_football") {
+
+      try {
+        const allowed = await canUseAIAnalysis(
+          interaction.member
+        );
+
+        if (!allowed) {
+          return interaction.reply({
+            content:
+              "❌ **You don't have access to AI Analysis.**",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const modal =
+          new ModalBuilder()
+            .setCustomId("prophixy_ai_football_modal")
+            .setTitle("⚽ Football AI Analysis");
+
+        const matchInput =
+          new TextInputBuilder()
+            .setCustomId("match")
+            .setLabel("Football match")
+            .setPlaceholder("e.g. Arsenal vs Aston Villa")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(200);
+
+        const row =
+          new ActionRowBuilder()
+            .addComponents(matchInput);
+
+        modal.addComponents(row);
+
+        await interaction.showModal(modal);
+
+      } catch (error) {
+        console.error(
+          "❌ Football AI Analysis button error:",
+          error
+        );
+
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content:
+              "❌ Unable to open Football AI Analysis right now.",
+            flags: MessageFlags.Ephemeral
+          }).catch(() => {});
+        }
+      }
+
+      return;
+    }
+
+    // =====================================================
+    // AI CRYPTO ANALYSIS BUTTON
+    // =====================================================
+
+    if (
+      interaction.isButton() &&
+      interaction.customId === "prophixy_ai_crypto"
+    ) {
+      try {
+        const allowed = await canUseAIAnalysis(
+          interaction.member
+        );
+
+        if (!allowed) {
+          return interaction.reply({
+            content:
+              "❌ **You don't have access to AI Analysis.**",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const modal =
+          new ModalBuilder()
+            .setCustomId("prophixy_ai_crypto_modal")
+            .setTitle("🪙 Crypto AI Analysis");
+
+        const coinInput =
+          new TextInputBuilder()
+            .setCustomId("coin")
+            .setLabel("Cryptocurrency")
+            .setPlaceholder(
+              "e.g. Bitcoin, BTC, Ethereum, ETH"
+            )
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(100);
+
+        const row =
+          new ActionRowBuilder()
+            .addComponents(coinInput);
+
+        modal.addComponents(row);
+
+        await interaction.showModal(modal);
+
+      } catch (error) {
+        console.error(
+          "❌ Crypto AI Analysis button error:",
+          error
+        );
+
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content:
+              "❌ Unable to open Crypto AI Analysis right now.",
+            flags: MessageFlags.Ephemeral
+          }).catch(() => {});
+        }
+      }
+
+      return;
+    }
+
+    // =====================================================
     // AI MARKET SELECTION
     // =====================================================
 
@@ -946,6 +1148,495 @@ ${user.sbt?.role || "Not Verified"}`
       "customId=",
       interaction.customId || "NONE"
     );
+
+    // =====================================================
+    // AI CRYPTO ANALYSIS SUBMISSION
+    // =====================================================
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId === "prophixy_ai_crypto_modal"
+    ) {
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+        const allowed = await canUseAIAnalysis(
+          interaction.member
+        );
+
+        if (!allowed) {
+          return interaction.editReply({
+            content:
+              "❌ You no longer have access to AI Analysis."
+          });
+        }
+
+        const subject =
+          interaction.fields
+            .getTextInputValue("coin")
+            .trim();
+
+        if (!subject) {
+          return interaction.editReply({
+            content:
+              "❌ Please enter a cryptocurrency."
+          });
+        }
+
+        console.log(
+          "🪙 AI CRYPTO ANALYSIS REQUEST:",
+          interaction.user.id,
+          subject
+        );
+
+        // searchCoin returns a single verified CoinGecko coin object.
+        const coin = await searchCoin(subject);
+
+        if (!coin?.id) {
+          return interaction.editReply({
+            content:
+              "❌ **I couldn't find that cryptocurrency.**\n\n" +
+              "Try a name or symbol, for example:\n" +
+              "`Bitcoin` or `BTC`\n" +
+              "`Ethereum` or `ETH`"
+          });
+        }
+
+        console.log(
+          "🪙 AI CRYPTO ANALYSIS COIN:",
+          JSON.stringify(coin, null, 2)
+        );
+
+        // This uses the supported /coins/markets endpoint.
+        // No restricted CoinGecko market_chart endpoint is used.
+        const marketData =
+          await getCryptoMarketData(coin.id);
+
+        if (!marketData) {
+          return interaction.editReply({
+            content:
+              "❌ **Market data is currently unavailable for this cryptocurrency.**"
+          });
+        }
+
+        console.log(
+          "🪙 AI CRYPTO MARKET DATA:",
+          JSON.stringify(marketData, null, 2)
+        );
+
+        const analysis =
+          await analyzeCrypto({
+            subject,
+            coin,
+            marketData,
+            extraData: {
+              provider: "CoinGecko",
+              analysisTimestamp:
+                new Date().toISOString()
+            }
+          });
+
+        const scenarios =
+          Array.isArray(analysis.scenarios)
+            ? analysis.scenarios
+            : [];
+
+        const scenarioLines =
+          scenarios
+            .slice(0, 3)
+            .map(
+              scenario =>
+                `**${scenario.scenario || "Scenario"}** — ` +
+                `${Number(scenario.probability || 0)}%\n` +
+                `${scenario.reason || "No reasoning provided."}`
+            );
+
+        const keyFactors =
+          Array.isArray(analysis.keyFactors)
+            ? analysis.keyFactors
+            : [];
+
+        const plainEnglish =
+          analysis.plainEnglish &&
+          typeof analysis.plainEnglish === "object"
+            ? analysis.plainEnglish
+            : {};
+
+          const riskNotes =
+          Array.isArray(
+            analysis.riskManagement?.riskNotes
+          )
+            ? analysis.riskManagement.riskNotes
+            : [];
+
+        const profitTaking =
+          Array.isArray(analysis.profitTaking)
+            ? analysis.profitTaking
+            : [];
+
+        const limitations =
+          Array.isArray(analysis.dataLimitations)
+            ? analysis.dataLimitations
+            : [];
+
+        // Support the structured data returned by cryptoMarketData.js.
+        const market =
+          marketData.market ||
+          {};
+
+        const currentPrice =
+          Number(
+            market.priceUsd ??
+            market.currentPriceUsd ??
+            market.current_price ??
+            marketData.currentPriceUsd ??
+            marketData.priceUsd ??
+            0
+          );
+
+        const priceText =
+          currentPrice > 0
+            ? `$${currentPrice.toLocaleString()}`
+            : "Unavailable";
+
+        const embed =
+          new EmbedBuilder()
+            .setColor(
+              analysis.bias === "Bullish"
+                ? 0x00C853
+                : analysis.bias === "Bearish"
+                  ? 0xD50000
+                  : 0xFFB300
+            )
+            .setTitle(
+              "🤖🪙 Prophixy AI Crypto Analysis"
+            )
+            .setDescription(
+              `**${coin.name || subject} (${String(
+                coin.symbol || ""
+              ).toUpperCase()})**\n` +
+              `💰 Current Price: **${priceText}**`
+            )
+            .addFields(
+              {
+                name: "📋 Summary",
+                value: String(
+                  analysis.summary ||
+                  "Unavailable"
+                ).slice(0, 1024)
+              },
+              {
+                name: "📊 Market Bias",
+                value:
+                  `**${analysis.bias || "Neutral"}**`,
+                inline: true
+              },
+              {
+                name: "🎯 Confidence",
+                value:
+                  `**${analysis.confidence || "Unknown"}**`,
+                inline: true
+              },
+              {
+                name: "📈 Market Structure",
+                value:
+                  `Trend: **${analysis.marketStructure?.trend || "Unknown"}**\n` +
+                  `Momentum: **${analysis.marketStructure?.momentum || "Unknown"}**`,
+                inline: true
+              },
+              {
+                name: "🔮 Scenarios",
+                value:
+                  scenarioLines.length
+                    ? scenarioLines
+                        .join("\n\n")
+                        .slice(0, 1024)
+                    : "No scenarios available."
+              },
+              {
+                name: "🧠 Plain-English Takeaway",
+                value: (
+                  `**What's happening:** ${plainEnglish.whatIsHappening || "Unavailable"}\n\n` +
+                  `**What it means:** ${plainEnglish.whatItMeans || "Unavailable"}\n\n` +
+                  `**AI takeaway:** ${plainEnglish.aiTakeaway || "Unavailable"}`
+                ).slice(0, 1024)
+              },
+              {
+                name: "🎯 Entry Strategy",
+                value: (
+                  `Status: **${analysis.entryStrategy?.status || "Unknown"}**\n` +
+                  `Zone: **${analysis.entryStrategy?.preferredZone || "Unavailable"}**\n` +
+                  `Confirmation: ${analysis.entryStrategy?.confirmation || "Unavailable"}\n` +
+                  `Alternative: ${analysis.entryStrategy?.alternativeEntry || "Unavailable"}\n` +
+                  `Why: ${analysis.entryStrategy?.why || "Unavailable"}`
+                ).slice(0, 1024)
+              },
+              {
+                name: "🛡️ Risk & Invalidation",
+                value:
+                  `Invalidation: **${analysis.riskManagement?.invalidation || "Unavailable"}**\n\n` +
+                  (
+                    riskNotes.length
+                      ? riskNotes
+                          .slice(0, 4)
+                          .map(risk => `• ${risk}`)
+                          .join("\n")
+                      : "No additional risk notes."
+                  )
+              },
+              {
+                name: "💰 Profit-Taking",
+                value:
+                  profitTaking.length
+                    ? profitTaking
+                        .slice(0, 5)
+                        .map(target => {
+                            if (target && typeof target === "object") {
+                              const price = target.target || "Target unavailable";
+                              const reason = target.reason
+                                ? ` — ${target.reason}`
+                                : "";
+                              return `• **${price}**${reason}`;
+                            }
+
+                            return `• ${String(target)}`;
+                          })
+                        .join("\n")
+                    : "Unavailable from supplied data."
+              },
+              {
+                name: "🔑 Key Factors",
+                value:
+                  keyFactors.length
+                    ? keyFactors
+                        .slice(0, 5)
+                        .map(factor => `• ${factor}`)
+                        .join("\n")
+                    : "Unavailable."
+              },
+              {
+                name: "⚠️ Data Limitations",
+                value:
+                  limitations.length
+                    ? limitations
+                        .slice(0, 5)
+                        .map(
+                          limitation =>
+                            `• ${limitation}`
+                        )
+                        .join("\n")
+                    : "No limitations reported."
+              }
+            )
+            .setFooter({
+              text:
+                "Prophixy AI • Educational analysis only • Not financial advice"
+            })
+            .setTimestamp();
+
+        await interaction.editReply({
+          embeds: [embed]
+        });
+
+      } catch (error) {
+        console.error(
+          "❌ AI Crypto Analysis error:",
+          error
+        );
+
+        await interaction.editReply({
+          content:
+            "❌ **Crypto analysis failed.**\n\n" +
+            `${error.message || "Unknown error."}`
+        }).catch(() => {});
+      }
+
+      return;
+    }
+
+    // =====================================================
+    // AI FOOTBALL ANALYSIS SUBMISSION
+    // =====================================================
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId === "prophixy_ai_football_modal"
+    ) {
+
+      await interaction.deferReply({
+        flags: MessageFlags.Ephemeral
+      });
+
+      try {
+
+        const allowed = await canUseAIAnalysis(
+          interaction.member
+        );
+
+        if (!allowed) {
+          return interaction.editReply({
+            content:
+              "❌ You no longer have access to AI Analysis."
+          });
+        }
+
+        const subject =
+          interaction.fields.getTextInputValue("match")
+            .trim();
+
+        if (!subject) {
+          return interaction.editReply({
+            content:
+              "❌ Please enter a football match."
+          });
+        }
+
+        console.log(
+          "🤖 AI FOOTBALL ANALYSIS REQUEST:",
+          interaction.user.id,
+          subject
+        );
+
+        const resolved =
+          await resolveAIFootballSubject(subject);
+
+        if (!resolved || !resolved.fixture) {
+          return interaction.editReply({
+            content:
+              "❌ **I couldn't verify that football fixture.**\n\n" +
+              "Please enter a specific upcoming match, for example:\n" +
+              "`Arsenal vs Aston Villa`"
+          });
+        }
+
+        console.log(
+          "✅ AI FOOTBALL ANALYSIS FIXTURE:",
+          JSON.stringify(resolved.fixture, null, 2)
+        );
+
+        const analysis =
+          await analyzeFootball({
+            subject,
+            fixture: resolved.fixture,
+            recentMatches:
+              resolved.recentMatches || [],
+            extraData:
+              resolved.extraData || {}
+          });
+
+        const bestOptions =
+          Array.isArray(analysis.bestOptions)
+            ? analysis.bestOptions
+            : [];
+
+        const optionLines =
+          bestOptions
+            .slice(0, 5)
+            .map((option, index) =>
+              `${index + 1}. **${option.option || "N/A"}** — ` +
+              `${Number(option.confidence || 0)}% confidence\n` +
+              `${option.reason || "No reasoning provided."}`
+            );
+
+        const embed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle("🤖⚽ Prophixy AI Football Analysis")
+            .setDescription(
+              `**${resolved.fixture.homeTeam} vs ${resolved.fixture.awayTeam}**`
+            )
+            .addFields(
+              {
+                name: "📋 Summary",
+                value:
+                  analysis.summary || "Unavailable"
+              },
+              {
+                name: "🎯 Confidence",
+                value:
+                  analysis.confidence || "Unknown",
+                inline: true
+              },
+              {
+                name: "📊 Match Outlook",
+                value:
+                  `Home: **${Number(analysis.matchOutlook?.homeWin || 0)}%**\n` +
+                  `Draw: **${Number(analysis.matchOutlook?.draw || 0)}%**\n` +
+                  `Away: **${Number(analysis.matchOutlook?.awayWin || 0)}%**`,
+                inline: true
+              },
+              {
+                name: "⚽ Goals Outlook",
+                value:
+                  `Over 2.5: **${Number(analysis.goalsOutlook?.over25 || 0)}%**\n` +
+                  `Under 2.5: **${Number(analysis.goalsOutlook?.under25 || 0)}%**`,
+                inline: true
+              },
+              {
+                name: "🔥 Both Teams To Score",
+                value:
+                  `Yes: **${Number(analysis.bothTeamsToScore?.yes || 0)}%**\n` +
+                  `No: **${Number(analysis.bothTeamsToScore?.no || 0)}%**`,
+                inline: true
+              },
+              {
+                name: "🏆 Best Options",
+                value:
+                  optionLines.length
+                    ? optionLines.join("\n\n")
+                    : "No options available."
+              },
+              {
+                name: "🔑 Key Factors",
+                value:
+                  Array.isArray(analysis.keyFactors) &&
+                  analysis.keyFactors.length
+                    ? analysis.keyFactors
+                        .slice(0, 5)
+                        .map(x => `• ${x}`)
+                        .join("\n")
+                    : "Unavailable."
+              },
+              {
+                name: "⚠️ Risks",
+                value:
+                  Array.isArray(analysis.risks) &&
+                  analysis.risks.length
+                    ? analysis.risks
+                        .slice(0, 5)
+                        .map(x => `• ${x}`)
+                        .join("\n")
+                    : "None provided."
+              }
+            )
+            .setFooter({
+              text:
+                "Prophixy AI • Analysis only • No guaranteed outcomes"
+            })
+            .setTimestamp();
+
+        await interaction.editReply({
+          embeds: [embed]
+        });
+
+      } catch (error) {
+
+        console.error(
+          "❌ AI Football Analysis error:",
+          error
+        );
+
+        await interaction.editReply({
+          content:
+            "❌ **Football analysis failed.**\n\n" +
+            `${error.message || "Unknown error."}`
+        }).catch(() => {});
+      }
+
+      return;
+    }
 
     // =====================================================
     // AI MARKET SUBMISSION
@@ -1717,6 +2408,90 @@ ${user.sbt?.role || "Not Verified"}`
 
 
         // =====================================================
+          // =====================================================
+          // AI ANALYSIS CHANNEL
+          // =====================================================
+
+          let aiAnalysisChannel =
+            guild.channels.cache.find(
+              channel =>
+                channel.type === ChannelType.GuildText &&
+                channel.name === "🤖・ai-analysis"
+            );
+
+          if (!aiAnalysisChannel) {
+            aiAnalysisChannel =
+              await guild.channels.create({
+                name: "🤖・ai-analysis",
+                type: ChannelType.GuildText
+              });
+
+            console.log(
+              `✅ Created #${aiAnalysisChannel.name}`
+            );
+          }
+
+          const aiAnalysisEmbed =
+            new EmbedBuilder()
+              .setColor(0x0099FF)
+              .setTitle("🤖 Prophixy AI Analysis")
+              .setDescription(
+                "Use Prophixy's AI to analyze football matches and cryptocurrencies.\\n\\n" +
+                "⚽ **Football Analysis** — Analyze a verified football fixture.\\n" +
+                "🪙 **Crypto Analysis** — Analyze a cryptocurrency using available market data.\\n\\n" +
+                "🔐 Access is controlled by roles configured by this server's administrators.\\n\\n" +
+                "⚠️ AI analysis provides estimates and educational information. It does not guarantee outcomes or provide financial advice."
+              )
+              .setFooter({
+                text: "Prophixy AI Analysis • Per-server access control"
+              });
+
+          const aiAnalysisButton =
+            new ButtonBuilder()
+              .setCustomId("prophixy_ai_analysis")
+              .setLabel("AI Analysis")
+              .setEmoji("🤖")
+              .setStyle(ButtonStyle.Primary);
+
+          const aiAnalysisRow =
+            new ActionRowBuilder()
+              .addComponents(aiAnalysisButton);
+
+          const existingAIAnalysisMessages =
+            await aiAnalysisChannel.messages.fetch({
+              limit: 50
+            });
+
+          const existingAIAnalysisMessage =
+            existingAIAnalysisMessages.find(
+              message =>
+                message.author.id === client.user.id &&
+                message.embeds.some(
+                  embed =>
+                    embed.title === "🤖 Prophixy AI Analysis"
+                )
+            );
+
+          if (existingAIAnalysisMessage) {
+            await existingAIAnalysisMessage.edit({
+              embeds: [aiAnalysisEmbed],
+              components: [aiAnalysisRow]
+            });
+
+            console.log(
+              "♻️ Updated existing AI Analysis panel."
+            );
+          } else {
+            await aiAnalysisChannel.send({
+              embeds: [aiAnalysisEmbed],
+              components: [aiAnalysisRow]
+            });
+
+            console.log(
+              "🆕 Created AI Analysis panel."
+            );
+          }
+
         // COMMUNITY PANEL
         // =====================================================
 
@@ -1803,6 +2578,7 @@ ${user.sbt?.role || "Not Verified"}`
             `✅ Prophixy panels created.\n\n` +
             `👤 Profile: ${profileChannel}\n` +
             `🏆 Leaderboard: ${leaderboardChannel}\n` +
+              `🤖 AI Analysis: ${aiAnalysisChannel}\n` +
             `🔮 Community panel: ${interaction.channel}`
         });
 
