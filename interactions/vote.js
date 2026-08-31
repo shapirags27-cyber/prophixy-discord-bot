@@ -408,15 +408,37 @@ async function handleStakeSubmit(interaction, client) {
     user.phx
   );
 
+  // Persist the user balance first.
+  // updateUser() performs its own db.read(), so event
+  // mutations must happen after that refresh.
+  await updateUser(user);
+
+  console.log("🎯 USER UPDATED SUCCESSFULLY");
+
+  // Reload the latest database state and update the
+  // actual stored event, not a stale event reference.
+  await db.read();
+
+  const storedEvent =
+    db.data.events.find(
+      e => e.id === eventId
+    );
+
+  if (!storedEvent) {
+    throw new Error(
+      `Event ${eventId} disappeared while processing stake`
+    );
+  }
+
   // ==========================================
   // ADD TO MARKET POOL
   // ==========================================
 
-  event.pool =
-    Number(event.pool || 0) + stake;
+  storedEvent.pool =
+    Number(storedEvent.pool || 0) + stake;
 
-  event.participants =
-    Number(event.participants || 0) + 1;
+  storedEvent.participants =
+    Number(storedEvent.participants || 0) + 1;
 
   // ==========================================
   // RECORD PREDICTION
@@ -446,10 +468,6 @@ async function handleStakeSubmit(interaction, client) {
     db.data.predictions.length
   );
 
-  await updateUser(user);
-
-  console.log("🎯 USER UPDATED SUCCESSFULLY");
-
   await save();
 
   console.log("🎯 DATABASE SAVED SUCCESSFULLY");
@@ -459,24 +477,24 @@ async function handleStakeSubmit(interaction, client) {
 
     console.log(
       "📊 PUBLIC MARKET UPDATE CHECK:",
-      event.id,
-      `channel=${event.channelId || "MISSING"}`,
-      `message=${event.messageId || "MISSING"}`,
-      `pool=${event.pool}`,
-      `participants=${event.participants}`
+      storedEvent.id,
+      `channel=${storedEvent.channelId || "MISSING"}`,
+      `message=${storedEvent.messageId || "MISSING"}`,
+      `pool=${storedEvent.pool}`,
+      `participants=${storedEvent.participants}`
     );
   // ==========================================
 
   if (
     client &&
-    event.channelId &&
-    event.messageId
+    storedEvent.channelId &&
+    storedEvent.messageId
   ) {
     try {
 
       const channel =
         await client.channels.fetch(
-          event.channelId
+          storedEvent.channelId
         );
 
       if (
@@ -486,7 +504,7 @@ async function handleStakeSubmit(interaction, client) {
 
         const marketMessage =
           await channel.messages.fetch(
-            event.messageId
+            storedEvent.messageId
           );
 
         if (
@@ -510,7 +528,7 @@ async function handleStakeSubmit(interaction, client) {
                     return {
                       name: field.name,
                       value:
-                        `${event.pool.toLocaleString()} PHX`,
+                        `${storedEvent.pool.toLocaleString()} PHX`,
                       inline: field.inline
                     };
                   }
@@ -521,7 +539,7 @@ async function handleStakeSubmit(interaction, client) {
                     return {
                       name: field.name,
                       value:
-                        String(event.participants),
+                        String(storedEvent.participants),
                       inline: field.inline
                     };
                   }
@@ -541,9 +559,9 @@ async function handleStakeSubmit(interaction, client) {
 
             console.log(
               "📊 PUBLIC MARKET MESSAGE UPDATED:",
-              event.id,
-              `pool=${event.pool}`,
-              `participants=${event.participants}`
+              storedEvent.id,
+              `pool=${storedEvent.pool}`,
+              `participants=${storedEvent.participants}`
             );
 
         }
@@ -586,7 +604,7 @@ async function handleStakeSubmit(interaction, client) {
       `**${stake.toLocaleString()} PHX**\n\n` +
 
       `🏦 Market pool:\n` +
-      `**${event.pool.toLocaleString()} PHX**\n\n` +
+      `**${storedEvent.pool.toLocaleString()} PHX**\n\n` +
 
       `💳 Remaining balance:\n` +
       `**${user.phx.toLocaleString()} PHX**\n\n` +
