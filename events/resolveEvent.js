@@ -194,8 +194,6 @@ async function resolveEvent(
       won
     );
 
-    user.totalPredictions =
-      Number(user.totalPredictions || 0) + 1;
 
     if (won) {
 
