@@ -18,6 +18,7 @@ const {
 } = require("discord.js");
 
 const {
+  db,
   initDB,
   getUser,
   createUser,
@@ -1387,19 +1388,32 @@ ${user.sbt?.role || "Not Verified"}`
           // Store the public Discord message so the
           // market pool and participant count can be
           // updated after each successful stake.
-          event.channelId =
+          await db.read();
+
+          const storedEvent =
+            db.data.events.find(
+              existing => existing.id === event.id
+            );
+
+          if (!storedEvent) {
+            throw new Error(
+              `Event ${event.id} not found while tracking public market message`
+            );
+          }
+
+          storedEvent.channelId =
             marketMessage.channelId;
 
-          event.messageId =
+          storedEvent.messageId =
             marketMessage.id;
 
           await save();
 
           console.log(
             "📊 AI MARKET MESSAGE TRACKED:",
-            event.id,
-            `channel=${event.channelId}`,
-            `message=${event.messageId}`
+            storedEvent.id,
+            `channel=${storedEvent.channelId}`,
+            `message=${storedEvent.messageId}`
           );
 
         }
@@ -3014,10 +3028,23 @@ ${user.sbt?.role || "Not Verified"}`
 
       // Store the public Discord message so its pool and
       // participant count can be updated after each stake.
-      event.channelId =
+      await db.read();
+
+      const storedEvent =
+        db.data.events.find(
+          existing => existing.id === event.id
+        );
+
+      if (!storedEvent) {
+        throw new Error(
+          `Event ${event.id} not found while tracking public market message`
+        );
+      }
+
+      storedEvent.channelId =
         marketMessage.channelId;
 
-      event.messageId =
+      storedEvent.messageId =
         marketMessage.id;
 
       await save();
