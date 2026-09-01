@@ -2508,6 +2508,7 @@ ${user.sbt?.role || "Not Verified"}`
               "🏆 **PHX Leaderboard** — See the top PHX holders\n" +
               "🎁 **Generate Invite** — Create your personal invite\n" +
               "🔐 **Verify Wallet** — Verify your Prophixy SBT\n" +
+              "🤖 **AI Analysis** — Analyze football matches and cryptocurrencies\n" +
               "🎫 **Support** — Open a private support ticket"
             )
             .setFooter({
@@ -2550,6 +2551,18 @@ ${user.sbt?.role || "Not Verified"}`
                 )
                 .setURL(
                   "https://prophixy-verify.onrender.com"
+                ),
+
+              new ButtonBuilder()
+                .setLabel(
+                  "AI Analysis"
+                )
+                .setEmoji("🤖")
+                .setStyle(
+                  ButtonStyle.Link
+                )
+                .setURL(
+                  `https://discord.com/channels/${guild.id}/${aiAnalysisChannel.id}`
                 ),
 
               new ButtonBuilder()
