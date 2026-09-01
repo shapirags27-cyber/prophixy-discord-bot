@@ -218,7 +218,15 @@ const commands = [
   // WALLET VERIFICATION PANEL
   // ===========================
 
+  // ===========================
+  // ADMIN AI ANALYSIS PANEL
+  // ===========================
+  new SlashCommandBuilder()
+    .setName("ai-panel")
+    .setDescription("Create or update the Prophixy AI Analysis panel"),
+
 ].map(command => command.toJSON());
+
 
 const rest = new REST({ version: "10" })
   .setToken(process.env.DISCORD_TOKEN);

@@ -2164,6 +2164,160 @@ ${user.sbt?.role || "Not Verified"}`
 
 
     // =====================================================
+      // =====================================================
+      // ADMIN AI ANALYSIS PANEL
+      // =====================================================
+
+      if (
+        interaction.commandName === "ai-panel"
+      ) {
+
+        if (
+          !interaction.member ||
+          !interaction.member.permissions.has(
+            PermissionFlagsBits.Administrator
+          )
+        ) {
+          return interaction.reply({
+            content:
+              "❌ You don't have permission to use the AI Analysis panel command.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral
+        });
+
+        try {
+
+          const guild = interaction.guild;
+
+          if (!guild) {
+            return interaction.editReply({
+              content:
+                "❌ This command can only be used inside a Discord server."
+            });
+          }
+
+          let aiAnalysisChannel =
+            guild.channels.cache.find(
+              channel =>
+                channel.type === ChannelType.GuildText &&
+                channel.name === "🤖・ai-analysis"
+            );
+
+          if (!aiAnalysisChannel) {
+
+            aiAnalysisChannel =
+              await guild.channels.create({
+                name: "🤖・ai-analysis",
+                type: ChannelType.GuildText
+              });
+
+            console.log(
+              `✅ Created #${aiAnalysisChannel.name}`
+            );
+          }
+
+          const aiAnalysisEmbed =
+            new EmbedBuilder()
+              .setColor(0x0099FF)
+              .setTitle("🤖 Prophixy AI Analysis")
+              .setDescription(
+                "Use Prophixy's AI to analyze football matches and cryptocurrencies.\n\n" +
+                "⚽ **Football Analysis** — Analyze a verified football fixture.\n" +
+                "🪙 **Crypto Analysis** — Analyze a cryptocurrency using available market data.\n\n" +
+                "🔐 Access is controlled by roles configured by this server's administrators.\n\n" +
+                "⚠️ AI analysis provides estimates and educational information. It does not guarantee outcomes or provide financial advice."
+              )
+              .setFooter({
+                text:
+                  "Prophixy AI Analysis • Per-server access control"
+              });
+
+          const aiAnalysisButton =
+            new ButtonBuilder()
+              .setCustomId(
+                "prophixy_ai_analysis"
+              )
+              .setLabel(
+                "AI Analysis"
+              )
+              .setEmoji("🤖")
+              .setStyle(
+                ButtonStyle.Primary
+              );
+
+          const aiAnalysisRow =
+            new ActionRowBuilder()
+              .addComponents(
+                aiAnalysisButton
+              );
+
+          const messages =
+            await aiAnalysisChannel.messages.fetch({
+              limit: 50
+            });
+
+          const existingPanel =
+            messages.find(
+              message =>
+                message.author.id === client.user.id &&
+                message.embeds.some(
+                  embed =>
+                    embed.title === "🤖 Prophixy AI Analysis"
+                )
+            );
+
+          if (existingPanel) {
+
+            await existingPanel.edit({
+              embeds: [aiAnalysisEmbed],
+              components: [aiAnalysisRow]
+            });
+
+            console.log(
+              "♻️ Updated existing AI Analysis panel."
+            );
+
+          } else {
+
+            await aiAnalysisChannel.send({
+              embeds: [aiAnalysisEmbed],
+              components: [aiAnalysisRow]
+            });
+
+            console.log(
+              "🆕 Created AI Analysis panel."
+            );
+
+          }
+
+          await interaction.editReply({
+            content:
+              `✅ **AI Analysis panel ready.**\n\n` +
+              `🤖 AI Analysis: ${aiAnalysisChannel}`
+          });
+
+        } catch (error) {
+
+          console.error(
+            "❌ AI Analysis panel creation error:",
+            error
+          );
+
+          await interaction.editReply({
+            content:
+              "❌ Could not create the AI Analysis panel."
+          }).catch(() => {});
+
+        }
+
+        return;
+      }
+
+
     // ADMIN COMMUNITY PANEL
     // =====================================================
 
