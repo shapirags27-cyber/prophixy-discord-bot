@@ -42,7 +42,8 @@ const { autoResolveFootballMarkets } = require("./services/autoResolveFootball")
 const { autoCloseExpiredMarkets } = require("./services/autoCloseExpiredMarkets");
 const {
   getMatch,
-  getMatchResult
+  getMatchResult,
+  getFootballMatchAnalysisData
 } = require("./services/footballData");
 const { generateMarkets } = require("./services/aiMarketGenerator");
 const { resolveAIFootballSubject } = require("./services/aiFootballResolver");
@@ -53,6 +54,7 @@ const {
 } = require("./services/aiAnalysis");
 
 const {
+  searchCoin,
   getCryptoMarketData
 } = require("./services/cryptoMarketData");
 
@@ -1516,106 +1518,542 @@ ${user.sbt?.role || "Not Verified"}`
           JSON.stringify(resolved.fixture, null, 2)
         );
 
+        let footballAnalysisData = {};
+
+        const footballAnalysisMatchId =
+          resolved.fixture.fixtureId ||
+          resolved.fixture.externalFixtureId ||
+          null;
+
+        if (footballAnalysisMatchId) {
+          try {
+            footballAnalysisData =
+              await getFootballMatchAnalysisData(
+                footballAnalysisMatchId
+              );
+
+            console.log(
+              "✅ AI FOOTBALL ANALYSIS DATA:",
+              JSON.stringify(
+                footballAnalysisData,
+                null,
+                2
+              )
+            );
+          } catch (error) {
+            console.error(
+              "⚠️ Football deep analysis data unavailable:",
+              error.message
+            );
+          }
+        }
+
         const analysis =
           await analyzeFootball({
             subject,
             fixture: resolved.fixture,
             recentMatches:
               resolved.recentMatches || [],
-            extraData:
-              resolved.extraData || {}
+            extraData: {
+              ...(resolved.extraData || {}),
+              footballAnalysisData
+            }
           });
 
-        const bestOptions =
-          Array.isArray(analysis.bestOptions)
-            ? analysis.bestOptions
+        const analyticalScenarios =
+          Array.isArray(analysis.analyticalScenarios)
+            ? analysis.analyticalScenarios
             : [];
 
-        const optionLines =
-          bestOptions
+        const safeText = (value, fallback = "Unavailable.") => {
+          if (value === null || value === undefined) {
+            return fallback;
+          }
+
+          if (typeof value === "string") {
+            const text = value.trim();
+            return text || fallback;
+          }
+
+          if (Array.isArray(value)) {
+            return value.length
+              ? value.map(item => safeText(item)).join("\n")
+              : fallback;
+          }
+
+          if (typeof value === "object") {
+            return Object.entries(value)
+              .map(([key, item]) => {
+                const label =
+                  key.charAt(0).toUpperCase() + key.slice(1);
+                return `**${label}:** ${safeText(item)}`;
+              })
+              .join("\n");
+          }
+
+          return String(value);
+        };
+
+        const limitText = (value, max = 1000) => {
+          const text = safeText(value);
+
+          if (text.length <= max) {
+            return text;
+          }
+
+          return `${text.slice(0, max - 3).trim()}...`;
+        };
+
+        const listSection = (
+          items,
+          fallback = "None reported."
+        ) => {
+          if (!Array.isArray(items) || !items.length) {
+            return fallback;
+          }
+
+          return items
             .slice(0, 5)
-            .map((option, index) =>
-              `${index + 1}. **${option.option || "N/A"}** — ` +
-              `${Number(option.confidence || 0)}% confidence\n` +
-              `${option.reason || "No reasoning provided."}`
+            .map(item => `• ${safeText(item)}`)
+            .join("\n");
+        };
+
+        const formatAnalysisSection = (
+          section,
+          fallback = "Unavailable."
+        ) => {
+          if (!section) {
+            return fallback;
+          }
+
+          if (typeof section === "string") {
+            return section;
+          }
+
+          if (typeof section !== "object") {
+            return String(section);
+          }
+
+          return Object.entries(section)
+            .map(([key, value]) => {
+              const label =
+                key.charAt(0).toUpperCase() +
+                key.slice(1);
+
+              if (Array.isArray(value)) {
+                return (
+                  `**${label}:**\n` +
+                  value
+                    .slice(0, 5)
+                    .map(item => `• ${safeText(item)}`)
+                    .join("\n")
+                );
+              }
+
+              return `**${label}:** ${safeText(value)}`;
+            })
+            .join("\n\n") || fallback;
+        };
+
+        const formatPreference = (
+          preference,
+          icon = "⭐"
+        ) => {
+          if (!preference || typeof preference !== "object") {
+            return "No Strong Preference";
+          }
+
+          const outcome =
+            safeText(
+              preference.outcome,
+              "No Strong Preference"
             );
 
-        const embed =
+          const confidence = Number(
+            preference.confidence
+          );
+
+          const confidenceText =
+            Number.isFinite(confidence)
+              ? `${Math.max(0, Math.min(100, confidence))}% analytical confidence`
+              : "Confidence unavailable";
+
+          const reason = limitText(
+            preference.reason,
+            700
+          );
+
+          return (
+            `${icon} **${outcome}**\n` +
+            `_${confidenceText}_\n` +
+            `${reason}`
+          );
+        };
+
+        const scenarioLines =
+          analyticalScenarios
+            .slice(0, 4)
+            .map((scenario, index) => {
+              const confidence =
+                Number(scenario?.confidence);
+
+              const confidenceText =
+                Number.isFinite(confidence)
+                  ? ` • ${Math.max(0, Math.min(100, confidence))}%`
+                  : "";
+
+              return (
+                `**${index + 1}. ${safeText(
+                  scenario?.scenario,
+                  "Analytical scenario"
+                )}${confidenceText}**\n` +
+                `${limitText(
+                  scenario?.reason,
+                  600
+                )}`
+              );
+            });
+
+        const statisticalAdvantages =
+          listSection(
+            analysis.statisticalAdvantages,
+            "No major statistical advantage identified."
+          );
+
+        const conflictingSignals =
+          listSection(
+            analysis.conflictingSignals,
+            "No major conflicting signal identified."
+          );
+
+        const keyFactors =
+          listSection(
+            analysis.keyFactors,
+            "No key factors reported."
+          );
+
+        const risks =
+          listSection(
+            analysis.risks,
+            "No specific risks reported."
+          );
+
+        const dataLimitations =
+          listSection(
+            analysis.dataLimitations,
+            "No additional data limitations reported."
+          );
+
+        const preferred =
+          analysis.preferredOutcomes || {};
+
+        const preferredMatchResult =
+          preferred.matchResult || {};
+
+        const preferredGoals =
+          preferred.goals || {};
+
+        const preferredBTTS =
+          preferred.bothTeamsToScore || {};
+
+        const preferredCorrectScore =
+          preferred.correctScore || {};
+
+        const preferredAlternatives =
+          Array.isArray(preferred.alternatives)
+            ? preferred.alternatives
+            : [];
+
+        const matchOutlook =
+          analysis.matchOutlook || {};
+
+        const goalsOutlook =
+          analysis.goalsOutlook || {};
+
+        const bttsOutlook =
+          analysis.bothTeamsToScore || {};
+
+        const fixtureDate =
+          resolved.fixture?.kickoff ||
+          resolved.fixture?.date ||
+          null;
+
+        const formattedKickoff = fixtureDate
+          ? (() => {
+              const date = new Date(fixtureDate);
+
+              if (Number.isNaN(date.getTime())) {
+                return "Kickoff time unavailable";
+              }
+
+              return (
+                date.toLocaleString("en-GB", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "UTC"
+                }) + " UTC"
+              );
+            })()
+          : "Kickoff time unavailable";
+
+        const competitionName =
+          resolved.fixture?.competition ||
+          footballAnalysisData?.fixture?.competition?.name ||
+          "Football";
+
+        const matchday =
+          footballAnalysisData?.fixture?.matchday ||
+          "N/A";
+
+        const coreEmbed =
           new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle("🤖⚽ Prophixy AI Football Analysis")
+            .setTitle(
+              "🤖⚽ PROPHIXY FOOTBALL INTELLIGENCE"
+            )
             .setDescription(
-              `**${resolved.fixture.homeTeam} vs ${resolved.fixture.awayTeam}**`
+              [
+                `### ${resolved.fixture.homeTeam} vs ${resolved.fixture.awayTeam}`,
+                `**${competitionName}** • Matchday ${matchday}`,
+                `📅 ${formattedKickoff}`,
+                "",
+                "📡 **Verified data:** football-data.org",
+                "🧠 **Analysis:** Prophixy AI",
+                "",
+                `> ${limitText(
+                  analysis.summary,
+                  900
+                )}`
+              ].join("\n")
             )
             .addFields(
               {
-                name: "📋 Summary",
-                value:
-                  analysis.summary || "Unavailable"
+                name: "📋 Executive Assessment",
+                value: limitText(
+                  analysis.summary
+                )
               },
               {
-                name: "🎯 Confidence",
-                value:
-                  analysis.confidence || "Unknown",
+                name: "🎯 Analysis Confidence",
+                value: safeText(
+                  analysis.confidence,
+                  "Unknown"
+                ),
                 inline: true
               },
               {
-                name: "📊 Match Outlook",
-                value:
-                  `Home: **${Number(analysis.matchOutlook?.homeWin || 0)}%**\n` +
-                  `Draw: **${Number(analysis.matchOutlook?.draw || 0)}%**\n` +
-                  `Away: **${Number(analysis.matchOutlook?.awayWin || 0)}%**`,
-                inline: true
+                name: "🏟️ Fixture Context",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.fixtureAnalysis
+                  )
+                )
               },
               {
-                name: "⚽ Goals Outlook",
-                value:
-                  `Over 2.5: **${Number(analysis.goalsOutlook?.over25 || 0)}%**\n` +
-                  `Under 2.5: **${Number(analysis.goalsOutlook?.under25 || 0)}%**`,
-                inline: true
+                name: "📈 Current Form",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.formAnalysis
+                  )
+                )
               },
               {
-                name: "🔥 Both Teams To Score",
-                value:
-                  `Yes: **${Number(analysis.bothTeamsToScore?.yes || 0)}%**\n` +
-                  `No: **${Number(analysis.bothTeamsToScore?.no || 0)}%**`,
-                inline: true
+                name: "🏠 Home vs Away",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.homeAwayAnalysis
+                  )
+                )
               },
               {
-                name: "🏆 Best Options",
-                value:
-                  optionLines.length
-                    ? optionLines.join("\n\n")
-                    : "No options available."
+                name: "🤝 Head-to-Head",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.headToHeadAnalysis
+                  )
+                )
               },
               {
-                name: "🔑 Key Factors",
-                value:
-                  Array.isArray(analysis.keyFactors) &&
-                  analysis.keyFactors.length
-                    ? analysis.keyFactors
-                        .slice(0, 5)
-                        .map(x => `• ${x}`)
-                        .join("\n")
-                    : "Unavailable."
+                name: "🏆 League Comparison",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.leagueComparison
+                  )
+                )
               },
               {
-                name: "⚠️ Risks",
-                value:
-                  Array.isArray(analysis.risks) &&
-                  analysis.risks.length
-                    ? analysis.risks
-                        .slice(0, 5)
-                        .map(x => `• ${x}`)
-                        .join("\n")
-                    : "None provided."
+                name: "⚽ Scoring Analysis",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.scoringAnalysis
+                  )
+                )
+              },
+              {
+                name: "🛡️ Defensive Analysis",
+                value: limitText(
+                  formatAnalysisSection(
+                    analysis.defensiveAnalysis
+                  )
+                )
+              },
+              {
+                name: "📌 Statistical Advantages",
+                value: limitText(
+                  statisticalAdvantages
+                )
+              },
+              {
+                name: "⚖️ Conflicting Signals",
+                value: limitText(
+                  conflictingSignals
+                )
               }
             )
             .setFooter({
               text:
-                "Prophixy AI • Analysis only • No guaranteed outcomes"
+                "Prophixy AI • Verified football-data.org analysis • Analysis only"
             })
             .setTimestamp();
+
+        const outlookEmbed =
+          new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(
+              "🎯 PROPHIXY AI OUTLOOK"
+            )
+            .setDescription(
+              [
+                `**${resolved.fixture.homeTeam} vs ${resolved.fixture.awayTeam}**`,
+                "",
+                "The preferences below are analytical estimates based on the verified football data.",
+                "",
+                "⚠️ **Not guarantees or betting instructions.**"
+              ].join("\n")
+            )
+            .addFields(
+              {
+                name: "🏆 PREFERRED MATCH RESULT",
+                value: formatPreference(
+                  preferredMatchResult,
+                  "⭐"
+                ),
+                inline: true
+              },
+              {
+                name: "⚽ PREFERRED GOALS OUTCOME",
+                value: formatPreference(
+                  preferredGoals,
+                  "⭐"
+                ),
+                inline: true
+              },
+              {
+                name: "🔥 PREFERRED BTTS OUTCOME",
+                value: formatPreference(
+                  preferredBTTS,
+                  "⭐"
+                ),
+                inline: true
+              },
+              {
+                name: "🎯 PREFERRED CORRECT SCORE",
+                value: formatPreference(
+                  preferredCorrectScore,
+                  "🎯"
+                )
+              },
+              {
+                name: "📊 STATISTICAL OUTLOOK",
+                value: [
+                  `🏠 Home win: **${Number(matchOutlook.homeWin || 0)}%**`,
+                  `🤝 Draw: **${Number(matchOutlook.draw || 0)}%**`,
+                  `✈️ Away win: **${Number(matchOutlook.awayWin || 0)}%**`,
+                  "",
+                  `⬆️ Over 2.5: **${Number(goalsOutlook.over25 || 0)}%**`,
+                  `⬇️ Under 2.5: **${Number(goalsOutlook.under25 || 0)}%**`,
+                  "",
+                  `🔥 BTTS Yes: **${Number(bttsOutlook.yes || 0)}%**`,
+                  `🚫 BTTS No: **${Number(bttsOutlook.no || 0)}%**`
+                ].join("\n"),
+                inline: true
+              },
+              {
+                name: "🧠 ANALYTICAL SCENARIOS",
+                value: limitText(
+                  scenarioLines.length
+                    ? scenarioLines.join("\n\n")
+                    : "No scenarios available."
+                ),
+                inline: true
+              },
+              {
+                name: "🔑 KEY FACTORS",
+                value: limitText(
+                  keyFactors
+                )
+              },
+              {
+                name: "⚠️ RISKS",
+                value: limitText(
+                  risks
+                )
+              },
+              {
+                name: "ℹ️ DATA LIMITATIONS",
+                value: limitText(
+                  dataLimitations
+                )
+              },
+              {
+                name: "🔄 ALTERNATIVE ANALYTICAL OUTCOMES",
+                value: limitText(
+                  preferredAlternatives.length
+                    ? preferredAlternatives
+                        .slice(0, 4)
+                        .map((item, index) => {
+                          const confidence =
+                            Number(item?.confidence);
+
+                          const confidenceText =
+                            Number.isFinite(confidence)
+                              ? ` • ${Math.max(0, Math.min(100, confidence))}%`
+                              : "";
+
+                          return [
+                            `**${index + 1}. ${safeText(
+                              item?.category,
+                              "Alternative"
+                            )}: ${safeText(
+                              item?.outcome,
+                              "No outcome specified"
+                            )}${confidenceText}**`,
+                            limitText(
+                              item?.reason,
+                              500
+                            )
+                          ].join("\n");
+                        })
+                        .join("\n\n")
+                    : "No alternative analytical outcomes were identified."
+                )
+              }
+            )
+            .setFooter({
+              text:
+                "Prophixy AI • Preferred outcomes are analytical estimates, not guarantees"
+            })
+            .setTimestamp();
+
+        await interaction.editReply({
+          embeds: [
+            coreEmbed,
+            outlookEmbed
+          ]
+        });
 
         await interaction.editReply({
           embeds: [embed]

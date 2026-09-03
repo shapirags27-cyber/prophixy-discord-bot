@@ -720,10 +720,871 @@ async function getMatchResult(matchId) {
   };
 }
 
+
+// ==========================================
+// FOOTBALL AI ANALYSIS DATA
+// ==========================================
+
+const footballAnalysisCache = new Map();
+
+const FOOTBALL_ANALYSIS_CACHE_TTL =
+  5 * 60 * 1000;
+
+function analysisCacheGet(key) {
+  const cached = footballAnalysisCache.get(key);
+
+  if (!cached) {
+    return null;
+  }
+
+  if (
+    Date.now() - cached.createdAt >
+    FOOTBALL_ANALYSIS_CACHE_TTL
+  ) {
+    footballAnalysisCache.delete(key);
+    return null;
+  }
+
+  return cached.data;
+}
+
+function analysisCacheSet(key, data) {
+  footballAnalysisCache.set(key, {
+    createdAt: Date.now(),
+    data
+  });
+}
+
+function toNumber(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : null;
+}
+
+function getMatchTeamGoals(match, teamId) {
+  const homeId = Number(match.homeTeam?.id);
+  const awayId = Number(match.awayTeam?.id);
+
+  const homeGoals =
+    toNumber(match.score?.fullTime?.home);
+
+  const awayGoals =
+    toNumber(match.score?.fullTime?.away);
+
+  if (
+    Number(teamId) === homeId
+  ) {
+    return {
+      scored: homeGoals,
+      conceded: awayGoals
+    };
+  }
+
+  if (
+    Number(teamId) === awayId
+  ) {
+    return {
+      scored: awayGoals,
+      conceded: homeGoals
+    };
+  }
+
+  return {
+    scored: null,
+    conceded: null
+  };
+}
+
+function calculateTeamStatistics(
+  matches,
+  teamId
+) {
+  const stats = {
+    played: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    cleanSheets: 0,
+    failedToScore: 0,
+    bothTeamsToScore: 0,
+    over25: 0,
+    under25: 0,
+    form: [],
+    matches: []
+  };
+
+  for (const match of matches || []) {
+    const status =
+      String(match.status || "").toUpperCase();
+
+    if (status !== "FINISHED") {
+      continue;
+    }
+
+    const goals =
+      getMatchTeamGoals(match, teamId);
+
+    if (
+      goals.scored === null ||
+      goals.conceded === null
+    ) {
+      continue;
+    }
+
+    stats.played += 1;
+    stats.goalsFor += goals.scored;
+    stats.goalsAgainst += goals.conceded;
+
+    if (goals.conceded === 0) {
+      stats.cleanSheets += 1;
+    }
+
+    if (goals.scored === 0) {
+      stats.failedToScore += 1;
+    }
+
+    if (
+      goals.scored > 0 &&
+      goals.conceded > 0
+    ) {
+      stats.bothTeamsToScore += 1;
+    }
+
+    if (
+      goals.scored + goals.conceded > 2.5
+    ) {
+      stats.over25 += 1;
+    } else {
+      stats.under25 += 1;
+    }
+
+    let result = "D";
+
+    if (goals.scored > goals.conceded) {
+      result = "W";
+      stats.wins += 1;
+    } else if (
+      goals.scored < goals.conceded
+    ) {
+      result = "L";
+      stats.losses += 1;
+    } else {
+      stats.draws += 1;
+    }
+
+    stats.form.push(result);
+
+    const isHome =
+      Number(match.homeTeam?.id) ===
+      Number(teamId);
+
+    const opponent =
+      isHome
+        ? match.awayTeam
+        : match.homeTeam;
+
+    stats.matches.push({
+      id: Number(match.id),
+      date: match.utcDate || null,
+      competition:
+        match.competition?.name || null,
+      competitionCode:
+        match.competition?.code || null,
+      opponent: opponent?.name || null,
+      opponentId:
+        opponent?.id
+          ? Number(opponent.id)
+          : null,
+      venue:
+        isHome
+          ? "HOME"
+          : "AWAY",
+      result,
+      goalsFor: goals.scored,
+      goalsAgainst: goals.conceded,
+      halfTime: {
+        scored:
+          isHome
+            ? toNumber(
+                match.score?.halfTime?.home
+              )
+            : toNumber(
+                match.score?.halfTime?.away
+              ),
+        conceded:
+          isHome
+            ? toNumber(
+                match.score?.halfTime?.away
+              )
+            : toNumber(
+                match.score?.halfTime?.home
+              )
+      }
+    });
+  }
+
+  stats.form = stats.form.slice(-10);
+
+  stats.averageGoalsFor =
+    stats.played > 0
+      ? Number(
+          (
+            stats.goalsFor /
+            stats.played
+          ).toFixed(2)
+        )
+      : null;
+
+  stats.averageGoalsAgainst =
+    stats.played > 0
+      ? Number(
+          (
+            stats.goalsAgainst /
+            stats.played
+          ).toFixed(2)
+        )
+      : null;
+
+  stats.cleanSheetRate =
+    stats.played > 0
+      ? Number(
+          (
+            (stats.cleanSheets /
+              stats.played) *
+            100
+          ).toFixed(1)
+        )
+      : null;
+
+  stats.failedToScoreRate =
+    stats.played > 0
+      ? Number(
+          (
+            (stats.failedToScore /
+              stats.played) *
+            100
+          ).toFixed(1)
+        )
+      : null;
+
+  stats.bttsRate =
+    stats.played > 0
+      ? Number(
+          (
+            (stats.bothTeamsToScore /
+              stats.played) *
+            100
+          ).toFixed(1)
+        )
+      : null;
+
+  stats.over25Rate =
+    stats.played > 0
+      ? Number(
+          (
+            (stats.over25 /
+              stats.played) *
+            100
+          ).toFixed(1)
+        )
+      : null;
+
+  return stats;
+}
+
+function getRecentMatches(
+  matches,
+  teamId,
+  limit = 10
+) {
+  return (matches || [])
+    .filter(match =>
+      String(match.status || "").toUpperCase() ===
+      "FINISHED"
+    )
+    .sort(
+      (a, b) =>
+        Date.parse(a.utcDate || 0) -
+        Date.parse(b.utcDate || 0)
+    )
+    .slice(-limit);
+}
+
+function findStandingForTeam(
+  standings,
+  teamId
+) {
+  for (const standing of standings || []) {
+    const row =
+      (standing.table || []).find(
+        item =>
+          Number(item.team?.id) ===
+          Number(teamId)
+      );
+
+    if (row) {
+      return {
+        position:
+          toNumber(row.position),
+        played:
+          toNumber(row.playedGames),
+        wins:
+          toNumber(row.won),
+        draws:
+          toNumber(row.draw),
+        losses:
+          toNumber(row.lost),
+        points:
+          toNumber(row.points),
+        goalsFor:
+          toNumber(row.goalsFor),
+        goalsAgainst:
+          toNumber(row.goalsAgainst),
+        goalDifference:
+          toNumber(row.goalDifference)
+      };
+    }
+  }
+
+  return null;
+}
+
+function calculateHeadToHead(
+  headToHeadMatches,
+  homeTeamId,
+  awayTeamId
+) {
+  const result = {
+    available: false,
+    totalMeetings: 0,
+    homeWins: 0,
+    draws: 0,
+    awayWins: 0,
+    homeGoals: 0,
+    awayGoals: 0,
+    btts: 0,
+    over25: 0,
+    meetings: []
+  };
+
+  for (const match of headToHeadMatches || []) {
+    const homeId =
+      Number(match.homeTeam?.id);
+
+    const awayId =
+      Number(match.awayTeam?.id);
+
+    const isRelevant =
+      (
+        homeId === Number(homeTeamId) &&
+        awayId === Number(awayTeamId)
+      ) ||
+      (
+        homeId === Number(awayTeamId) &&
+        awayId === Number(homeTeamId)
+      );
+
+    if (!isRelevant) {
+      continue;
+    }
+
+    const homeGoals =
+      toNumber(match.score?.fullTime?.home);
+
+    const awayGoals =
+      toNumber(match.score?.fullTime?.away);
+
+    if (
+      homeGoals === null ||
+      awayGoals === null
+    ) {
+      continue;
+    }
+
+    result.available = true;
+    result.totalMeetings += 1;
+
+    if (homeId === Number(homeTeamId)) {
+      result.homeGoals += homeGoals;
+      result.awayGoals += awayGoals;
+
+      if (homeGoals > awayGoals) {
+        result.homeWins += 1;
+      } else if (
+        homeGoals < awayGoals
+      ) {
+        result.awayWins += 1;
+      } else {
+        result.draws += 1;
+      }
+    } else {
+      result.homeGoals += awayGoals;
+      result.awayGoals += homeGoals;
+
+      if (awayGoals > homeGoals) {
+        result.homeWins += 1;
+      } else if (
+        awayGoals < homeGoals
+      ) {
+        result.awayWins += 1;
+      } else {
+        result.draws += 1;
+      }
+    }
+
+    if (
+      homeGoals > 0 &&
+      awayGoals > 0
+    ) {
+      result.btts += 1;
+    }
+
+    if (
+      homeGoals + awayGoals > 2.5
+    ) {
+      result.over25 += 1;
+    }
+
+    result.meetings.push({
+      id: Number(match.id),
+      date: match.utcDate || null,
+      competition:
+        match.competition?.name || null,
+      homeTeam:
+        match.homeTeam?.name || null,
+      awayTeam:
+        match.awayTeam?.name || null,
+      homeGoals,
+      awayGoals,
+      winner:
+        homeGoals > awayGoals
+          ? "home"
+          : awayGoals > homeGoals
+            ? "away"
+            : "draw"
+    });
+  }
+
+  result.meetings.sort(
+    (a, b) =>
+      Date.parse(b.date || 0) -
+      Date.parse(a.date || 0)
+  );
+
+  result.meetings =
+    result.meetings.slice(0, 10);
+
+  if (result.totalMeetings > 0) {
+    result.bttsRate = Number(
+      (
+        (result.btts /
+          result.totalMeetings) *
+        100
+      ).toFixed(1)
+    );
+
+    result.over25Rate = Number(
+      (
+        (result.over25 /
+          result.totalMeetings) *
+        100
+      ).toFixed(1)
+    );
+
+    result.averageTotalGoals = Number(
+      (
+        (
+          result.homeGoals +
+          result.awayGoals
+        ) /
+        result.totalMeetings
+      ).toFixed(2)
+    );
+  } else {
+    result.bttsRate = null;
+    result.over25Rate = null;
+    result.averageTotalGoals = null;
+  }
+
+  return result;
+}
+
+async function getFootballMatchAnalysisData(
+  matchId
+) {
+  if (!matchId) {
+    throw new Error(
+      "Football-data match ID is required."
+    );
+  }
+
+  const numericMatchId = Number(matchId);
+
+  if (!Number.isInteger(numericMatchId)) {
+    throw new Error(
+      "Football-data match ID must be an integer."
+    );
+  }
+
+  const cacheKey =
+    `football-analysis:${numericMatchId}`;
+
+  const cached =
+    analysisCacheGet(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const client = getClient();
+
+  /*
+   * First retrieve the verified fixture.
+   */
+  const matchResponse = await client.get(
+    `/matches/${numericMatchId}`
+  );
+
+  const match = matchResponse.data;
+
+  if (!match) {
+    throw new Error(
+      "Football-data match was not found."
+    );
+  }
+
+  const homeTeamId =
+    Number(match.homeTeam?.id);
+
+  const awayTeamId =
+    Number(match.awayTeam?.id);
+
+  if (
+    !Number.isInteger(homeTeamId) ||
+    !Number.isInteger(awayTeamId)
+  ) {
+    throw new Error(
+      "Football match is missing team IDs."
+    );
+  }
+
+  const competitionCode =
+    match.competition?.code || null;
+
+  const seasonStart =
+    match.season?.startDate || null;
+
+  const season =
+    seasonStart
+      ? Number(
+          String(seasonStart).slice(0, 4)
+        )
+      : null;
+
+  /*
+   * Team histories.
+   *
+   * We request the current season only so
+   * the analysis reflects the current campaign
+   * and avoids unnecessarily large responses.
+   */
+  const homeHistoryResponse =
+    await client.get(
+      `/teams/${homeTeamId}/matches`,
+      {
+        params: {
+          status: "FINISHED",
+          season,
+          limit: 100
+        }
+      }
+    );
+
+  const awayHistoryResponse =
+    await client.get(
+      `/teams/${awayTeamId}/matches`,
+      {
+        params: {
+          status: "FINISHED",
+          season,
+          limit: 100
+        }
+      }
+    );
+
+  /*
+   * Head-to-head is a dedicated football-data.org
+   * subresource of a match.
+   */
+  let headToHeadMatches = [];
+
+  try {
+    const h2hResponse =
+      await client.get(
+        `/matches/${numericMatchId}/head2head`,
+        {
+          params: {
+            limit: 10
+          }
+        }
+      );
+
+    headToHeadMatches =
+      Array.isArray(
+        h2hResponse.data?.matches
+      )
+        ? h2hResponse.data.matches
+        : [];
+  } catch (error) {
+    console.warn(
+      "⚠️ Football H2H unavailable: " +
+      `${error.response?.status || error.message}`
+    );
+  }
+
+  /*
+   * League standings.
+   *
+   * Some competitions such as cups do not
+   * expose standings. Treat that as unavailable
+   * rather than failing the entire analysis.
+   */
+  let standings = [];
+
+  if (competitionCode) {
+    try {
+      const standingsResponse =
+        await client.get(
+          `/competitions/${competitionCode}/standings`,
+          {
+            params: {
+              season
+            }
+          }
+        );
+
+      standings =
+        Array.isArray(
+          standingsResponse.data?.standings
+        )
+          ? standingsResponse.data.standings
+          : [];
+    } catch (error) {
+      console.warn(
+        "⚠️ Football standings unavailable: " +
+        `${error.response?.status || error.message}`
+      );
+    }
+  }
+
+  const homeMatches =
+    Array.isArray(
+      homeHistoryResponse.data?.matches
+    )
+      ? homeHistoryResponse.data.matches
+      : [];
+
+  const awayMatches =
+    Array.isArray(
+      awayHistoryResponse.data?.matches
+    )
+      ? awayHistoryResponse.data.matches
+      : [];
+
+  const homeRecent =
+    getRecentMatches(
+      homeMatches,
+      homeTeamId,
+      10
+    );
+
+  const awayRecent =
+    getRecentMatches(
+      awayMatches,
+      awayTeamId,
+      10
+    );
+
+  const homeOnly =
+    homeMatches.filter(
+      item =>
+        Number(item.homeTeam?.id) ===
+        homeTeamId
+    );
+
+  const awayOnly =
+    awayMatches.filter(
+      item =>
+        Number(item.awayTeam?.id) ===
+        awayTeamId
+    );
+
+  const homeFormMatches =
+    getRecentMatches(
+      homeOnly,
+      homeTeamId,
+      10
+    );
+
+  const awayFormMatches =
+    getRecentMatches(
+      awayOnly,
+      awayTeamId,
+      10
+    );
+
+  const homeStatistics =
+    calculateTeamStatistics(
+      homeRecent,
+      homeTeamId
+    );
+
+  const awayStatistics =
+    calculateTeamStatistics(
+      awayRecent,
+      awayTeamId
+    );
+
+  const homeFormStatistics =
+    calculateTeamStatistics(
+      homeFormMatches,
+      homeTeamId
+    );
+
+  const awayFormStatistics =
+    calculateTeamStatistics(
+      awayFormMatches,
+      awayTeamId
+    );
+
+  const homeStanding =
+    findStandingForTeam(
+      standings,
+      homeTeamId
+    );
+
+  const awayStanding =
+    findStandingForTeam(
+      standings,
+      awayTeamId
+    );
+
+  const headToHead =
+    calculateHeadToHead(
+      headToHeadMatches,
+      homeTeamId,
+      awayTeamId
+    );
+
+  const result = {
+    dataSource: "football-data.org",
+
+    generatedAt:
+      new Date().toISOString(),
+
+    fixture: {
+      id: numericMatchId,
+      date: match.utcDate || null,
+      status: match.status || null,
+      venue: match.venue || null,
+      matchday:
+        toNumber(match.matchday),
+      stage: match.stage || null,
+
+      competition: {
+        id:
+          toNumber(match.competition?.id),
+        name:
+          match.competition?.name || null,
+        code:
+          competitionCode
+      },
+
+      season: {
+        id:
+          toNumber(match.season?.id),
+        startDate:
+          match.season?.startDate || null,
+        endDate:
+          match.season?.endDate || null,
+        currentMatchday:
+          toNumber(
+            match.season?.currentMatchday
+          )
+      },
+
+      homeTeam: {
+        id: homeTeamId,
+        name:
+          match.homeTeam?.name || null,
+        shortName:
+          match.homeTeam?.shortName || null,
+        tla:
+          match.homeTeam?.tla || null
+      },
+
+      awayTeam: {
+        id: awayTeamId,
+        name:
+          match.awayTeam?.name || null,
+        shortName:
+          match.awayTeam?.shortName || null,
+        tla:
+          match.awayTeam?.tla || null
+      }
+    },
+
+    homeTeam: {
+      name:
+        match.homeTeam?.name || null,
+      recentForm:
+        homeStatistics,
+      homeForm:
+        homeFormStatistics,
+      leagueStanding:
+        homeStanding
+    },
+
+    awayTeam: {
+      name:
+        match.awayTeam?.name || null,
+      recentForm:
+        awayStatistics,
+      awayForm:
+        awayFormStatistics,
+      leagueStanding:
+        awayStanding
+    },
+
+    headToHead,
+
+    currentSeason: {
+      season,
+      competitionCode,
+      homeMatchesPlayed:
+        homeStatistics.played,
+      awayMatchesPlayed:
+        awayStatistics.played
+    }
+  };
+
+  analysisCacheSet(
+    cacheKey,
+    result
+  );
+
+  return result;
+}
+
 module.exports = {
   getTeam,
   searchFootballDataTeams,
   getNextTeamFixture,
   getMatch,
-  getMatchResult
+  getMatchResult,
+  getFootballMatchAnalysisData
 };
