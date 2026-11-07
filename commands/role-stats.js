@@ -33,7 +33,7 @@ module.exports = {
     if (!guild) {
       return interaction.reply({
         content:
-          "❌ This command can only be used inside the Prophixy server.",
+          "❌ This command can only be used inside the PhorvaGuard server.",
         ephemeral: true
       });
     }
@@ -61,7 +61,7 @@ module.exports = {
     const embed =
       new EmbedBuilder()
         .setColor(0x0099FF)
-        .setTitle("📊 Prophixy Discord Role Statistics")
+        .setTitle("📊 PhorvaGuard Discord Role Statistics")
         .setDescription(description)
         .setFooter({
           text:

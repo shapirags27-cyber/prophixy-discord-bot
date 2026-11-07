@@ -18,9 +18,9 @@ async function generateMarkets({
   const ai = getGemini();
 
   const prompt = `
-You are the prediction-market assistant for Prophixy.
+You are the prediction-market assistant for PhorvaGuard.
 
-Prophixy is an Africa-focused prediction market.
+PhorvaGuard is an Africa-focused prediction market.
 Its beta currency is PHX.
 
 Generate high-quality prediction markets from the supplied real-world information.

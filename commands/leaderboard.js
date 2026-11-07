@@ -11,7 +11,7 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("leaderboard")
-    .setDescription("View the Prophixy PHX leaderboard"),
+    .setDescription("View the PhorvaGuard PHX leaderboard"),
 
   async execute(interaction) {
     try {
@@ -36,7 +36,7 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
-        .setTitle("🏆 Prophixy PHX Leaderboard")
+        .setTitle("🏆 PhorvaGuard PHX Leaderboard")
         .setDescription(lines.join("\n"))
         .setFooter({
           text: rank

@@ -355,7 +355,7 @@ async function handleStakeSubmit(interaction, client) {
   if (!user) {
     return interaction.reply({
       content:
-        "❌ You don't have a Prophixy account yet.",
+        "❌ You don't have a PhorvaGuard account yet.",
       ephemeral: true
     });
   }

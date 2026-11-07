@@ -67,7 +67,7 @@ module.exports = {
 
       if (!verification.verified) {
         return interaction.editReply(
-          "❌ No valid Prophixy SBT was found in this wallet."
+          "❌ No valid PhorvaGuard SBT was found in this wallet."
         );
       }
 
@@ -150,7 +150,7 @@ module.exports = {
       return interaction.editReply(
         `✅ **Wallet verified successfully!**\n\n` +
         `**Wallet:** \`${verification.walletAddress}\`\n` +
-        `**SBT:** Prophixy SBT\n` +
+        `**SBT:** PhorvaGuard SBT\n` +
         `**Role:** **${verification.role}**\n` +
         `**PHX Balance:** **${Number(user.phx || 0).toLocaleString()} PHX**` +
         rewardMessage

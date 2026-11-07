@@ -16,7 +16,7 @@ async function assignSbtRole(guild, userId, roleName) {
 
   if (!targetRoleName) {
     throw new Error(
-      `Invalid Prophixy SBT role: "${roleName}"`
+      `Invalid PhorvaGuard SBT role: "${roleName}"`
     );
   }
 
@@ -38,7 +38,7 @@ async function assignSbtRole(guild, userId, roleName) {
     "Market Creator"
   ];
 
-  // Remove the opposite Prophixy creator role.
+  // Remove the opposite PhorvaGuard creator role.
   for (const creatorRoleName of creatorRoleNames) {
     const existingRole = guild.roles.cache.find(
       role =>

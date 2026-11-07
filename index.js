@@ -106,7 +106,7 @@ client.once(Events.ClientReady, async () => {
   }
 
   console.log(`✅ Logged in as ${client.user.tag}`);
-  console.log("🚀 Prophixy Beta is online!");
+  console.log("🚀 PhorvaGuard Beta is online!");
 
   // ==========================================
   // AUTO FOOTBALL RESOLUTION
@@ -254,7 +254,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
     }
 
     // Discord reports the bot as the technical creator of
-    // these invites. Use our saved Prophixy invite ownership
+    // these invites. Use our saved PhorvaGuard invite ownership
     // mapping to identify the actual person who shared it.
     let inviterId = null;
 
@@ -270,18 +270,18 @@ client.on(Events.GuildMemberAdd, async (member) => {
       inviterId = inviteLink.inviterId;
 
       console.log(
-        `🔗 Prophixy invite ${usedInvite.code} belongs to ${inviteLink.inviterUsername} (${inviterId})`
+        `🔗 PhorvaGuard invite ${usedInvite.code} belongs to ${inviteLink.inviterUsername} (${inviterId})`
       );
     } else {
       // Fallback for invites that were not generated through
-      // the Prophixy invite system.
+      // the PhorvaGuard invite system.
       inviterId = usedInvite.inviterId;
     }
 
     if (!inviterId || inviterId === client.user.id) {
 
       console.log(
-        `ℹ️ Could not identify a Prophixy inviter for ${member.user.tag}`
+        `ℹ️ Could not identify a PhorvaGuard inviter for ${member.user.tag}`
       );
 
       return;
@@ -308,7 +308,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
     if (inviteChannel) {
 
       await inviteChannel.send(
-        `🎉 **New Prophixy Invite!**\n\n` +
+        `🎉 **New PhorvaGuard Invite!**\n\n` +
         `👤 **${member.user.username}** was invited by <@${inviterId}>.\n` +
         `🎁 <@${inviterId}> earned **+10 PHX**.\n`+
         `👥 Their invite count has increased by **1**.`
@@ -387,8 +387,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
           await interaction.reply({
             content:
-              "🤖 **Prophixy AI Analysis**\\n\\n" +
-              "Choose what you want Prophixy AI to analyze:",
+              "🤖 **PhorvaGuard AI Analysis**\\n\\n" +
+              "Choose what you want PhorvaGuard AI to analyze:",
             components: [row],
             flags: MessageFlags.Ephemeral
           });
@@ -516,7 +516,7 @@ ${user.sbt?.role || "Not Verified"}`
           const leaderboardEmbed =
             new EmbedBuilder()
               .setColor(0x0099FF)
-              .setTitle("🏆 Prophixy PHX Leaderboard")
+              .setTitle("🏆 PhorvaGuard PHX Leaderboard")
               .setDescription(lines.join("\n"))
               .setFooter({
                 text: rank
@@ -590,7 +590,7 @@ ${user.sbt?.role || "Not Verified"}`
           const leaderboardEmbed =
             new EmbedBuilder()
               .setColor(0x00C853)
-              .setTitle("🎁 Prophixy Invite Leaderboard")
+              .setTitle("🎁 PhorvaGuard Invite Leaderboard")
               .setDescription(lines.join("\n"))
               .setFooter({
                 text:
@@ -657,7 +657,7 @@ ${user.sbt?.role || "Not Verified"}`
           setTimeout(async () => {
 
             await channel.delete(
-              "Prophixy support ticket closed"
+              "PhorvaGuard support ticket closed"
             ).then(() => {
 
               console.log(
@@ -747,8 +747,8 @@ ${user.sbt?.role || "Not Verified"}`
 
           await interaction.reply({
             content:
-              "🔐 **Prophixy Wallet Verification**\n\n" +
-              "Click the link below to connect your Discord account and wallet, then verify your Prophixy SBT.\n\n" +
+              "🔐 **PhorvaGuard Wallet Verification**\n\n" +
+              "Click the link below to connect your Discord account and wallet, then verify your PhorvaGuard SBT.\n\n" +
               "👉 https://prophixy-verify.onrender.com",
             flags: MessageFlags.Ephemeral
           });
@@ -1214,7 +1214,7 @@ ${user.sbt?.role || "Not Verified"}`
         // This uses the supported /coins/markets endpoint.
         // No restricted CoinGecko market_chart endpoint is used.
         const marketData =
-          await getCryptoMarketData(coin.id);
+          await getCryptoMarketData(coin);
 
         if (!marketData) {
           return interaction.editReply({
@@ -1313,7 +1313,7 @@ ${user.sbt?.role || "Not Verified"}`
                   : 0xFFB300
             )
             .setTitle(
-              "🤖🪙 Prophixy AI Crypto Analysis"
+              "🤖🪙 PhorvaGuard AI Crypto Analysis"
             )
             .setDescription(
               `**${coin.name || subject} (${String(
@@ -1434,7 +1434,7 @@ ${user.sbt?.role || "Not Verified"}`
             )
             .setFooter({
               text:
-                "Prophixy AI • Educational analysis only • Not financial advice"
+                "PhorvaGuard AI • Educational analysis only • Not financial advice"
             })
             .setTimestamp();
 
@@ -1812,7 +1812,7 @@ ${user.sbt?.role || "Not Verified"}`
           new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(
-              "🤖⚽ PROPHIXY FOOTBALL INTELLIGENCE"
+              "🤖⚽ PHORVAGUARD FOOTBALL INTELLIGENCE"
             )
             .setDescription(
               [
@@ -1821,7 +1821,7 @@ ${user.sbt?.role || "Not Verified"}`
                 `📅 ${formattedKickoff}`,
                 "",
                 "📡 **Verified data:** football-data.org",
-                "🧠 **Analysis:** Prophixy AI",
+                "🧠 **Analysis:** PhorvaGuard AI",
                 "",
                 `> ${limitText(
                   analysis.summary,
@@ -1915,7 +1915,7 @@ ${user.sbt?.role || "Not Verified"}`
             )
             .setFooter({
               text:
-                "Prophixy AI • Verified football-data.org analysis • Analysis only"
+                "PhorvaGuard AI • Verified football-data.org analysis • Analysis only"
             })
             .setTimestamp();
 
@@ -1923,7 +1923,7 @@ ${user.sbt?.role || "Not Verified"}`
           new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(
-              "🎯 PROPHIXY AI OUTLOOK"
+              "🎯 PHORVAGUARD AI OUTLOOK"
             )
             .setDescription(
               [
@@ -2044,7 +2044,7 @@ ${user.sbt?.role || "Not Verified"}`
             )
             .setFooter({
               text:
-                "Prophixy AI • Preferred outcomes are analytical estimates, not guarantees"
+                "PhorvaGuard AI • Preferred outcomes are analytical estimates, not guarantees"
             })
             .setTimestamp();
 
@@ -2661,9 +2661,9 @@ ${user.sbt?.role || "Not Verified"}`
           const aiAnalysisEmbed =
             new EmbedBuilder()
               .setColor(0x0099FF)
-              .setTitle("🤖 Prophixy AI Analysis")
+              .setTitle("🤖 PhorvaGuard AI Analysis")
               .setDescription(
-                "Use Prophixy's AI to analyze football matches and cryptocurrencies.\n\n" +
+                "Use PhorvaGuard's AI to analyze football matches and cryptocurrencies.\n\n" +
                 "⚽ **Football Analysis** — Analyze a verified football fixture.\n" +
                 "🪙 **Crypto Analysis** — Analyze a cryptocurrency using available market data.\n\n" +
                 "🔐 Access is controlled by roles configured by this server's administrators.\n\n" +
@@ -2671,7 +2671,7 @@ ${user.sbt?.role || "Not Verified"}`
               )
               .setFooter({
                 text:
-                  "Prophixy AI Analysis • Per-server access control"
+                  "PhorvaGuard AI Analysis • Per-server access control"
               });
 
           const aiAnalysisButton =
@@ -2704,7 +2704,7 @@ ${user.sbt?.role || "Not Verified"}`
                 message.author.id === client.user.id &&
                 message.embeds.some(
                   embed =>
-                    embed.title === "🤖 Prophixy AI Analysis"
+                    embed.title === "🤖 PhorvaGuard AI Analysis"
                 )
             );
 
@@ -2759,23 +2759,18 @@ ${user.sbt?.role || "Not Verified"}`
     // ADMIN COMMUNITY PANEL
     // =====================================================
 
-    if (
-      interaction.commandName === "panel"
-    ) {
-
+    if (interaction.commandName === "panel") {
       if (
         !interaction.member ||
         !interaction.member.permissions.has(
           PermissionFlagsBits.Administrator
         )
       ) {
-
         return interaction.reply({
           content:
-            "❌ You don't have permission to use the Prophixy panel command.",
+            "❌ You don't have permission to use the PhorvaGuard panel command.",
           flags: MessageFlags.Ephemeral
         });
-
       }
 
       await interaction.deferReply({
@@ -2783,413 +2778,363 @@ ${user.sbt?.role || "Not Verified"}`
       });
 
       try {
-
         const guild = interaction.guild;
 
         if (!guild) {
-
           return interaction.editReply({
             content:
-              "❌ This command can only be used inside the Prophixy server."
+              "❌ This command can only be used inside the PhorvaGuard server."
           });
-
         }
 
-
-        // =====================================================
-        // PROFILE CHANNEL
-        // =====================================================
-
-        let profileChannel =
-          guild.channels.cache.find(
-            channel =>
-              channel.type === ChannelType.GuildText &&
-              channel.name === "👤・profile"
+        // Find existing channels or create missing ones.
+        const getOrCreateTextChannel = async (name) => {
+          let channel = guild.channels.cache.find(
+            item =>
+              item.type === ChannelType.GuildText &&
+              item.name === name
           );
 
-        if (!profileChannel) {
-
-          profileChannel =
-            await guild.channels.create({
-              name: "👤・profile",
+          if (!channel) {
+            channel = await guild.channels.create({
+              name,
               type: ChannelType.GuildText
             });
 
-          console.log(
-            `✅ Created #${profileChannel.name}`
-          );
+            console.log(`✅ Created #${channel.name}`);
+          }
 
-        }
+          return channel;
+        };
 
-
-        const profileEmbed =
-          new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle("👤 Prophixy Profile")
-            .setDescription(
-              "View your Prophixy account information.\n\n" +
-              "Your profile shows:\n" +
-              "💰 PHX balance\n" +
-              "🏆 Wins\n" +
-              "❌ Losses\n" +
-              "📊 Predictions\n" +
-              "🎯 Accuracy\n" +
-              "🔥 Streak\n" +
-              "👥 Invites\n" +
-              "👛 Connected wallet\n" +
-              "🎖️ SBT role\n\n" +
-              "Click the button below to view your profile."
-            )
-            .setFooter({
-              text:
-                "Prophixy • Shape Africa's Future"
-            });
-
-
-        const profileButton =
-          new ButtonBuilder()
-            .setCustomId(
-              "prophixy_profile"
-            )
-            .setLabel(
-              "View My Profile"
-            )
-            .setEmoji("👤")
-            .setStyle(
-              ButtonStyle.Primary
-            );
-
-
-        const profileRow =
-          new ActionRowBuilder()
-            .addComponents(
-              profileButton
-            );
-
-
-        await profileChannel.send({
-          embeds: [profileEmbed],
-          components: [profileRow]
-        });
-
-
-        // =====================================================
-        // PHX LEADERBOARD CHANNEL
-        // =====================================================
-
-        let leaderboardChannel =
-          guild.channels.cache.find(
-            channel =>
-              channel.type === ChannelType.GuildText &&
-              channel.name ===
-                "🏆・phx-leaderboard"
-          );
-
-        if (!leaderboardChannel) {
-
-          leaderboardChannel =
-            await guild.channels.create({
-              name:
-                "🏆・phx-leaderboard",
-              type:
-                ChannelType.GuildText
-            });
-
-          console.log(
-            `✅ Created #${leaderboardChannel.name}`
-          );
-
-        }
-
-
-        const leaderboardEmbed =
-          new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle(
-              "🏆 Prophixy PHX Leaderboard"
-            )
-            .setDescription(
-              "See the top PHX holders in the Prophixy community.\n\n" +
-              "Click the button below to view the current leaderboard."
-            )
-            .setFooter({
-              text:
-                "Prophixy • Shape Africa's Future"
-            });
-
-
-        const leaderboardButton =
-          new ButtonBuilder()
-            .setCustomId(
-              "prophixy_leaderboard"
-            )
-            .setLabel(
-              "View PHX Leaderboard"
-            )
-            .setEmoji("🏆")
-            .setStyle(
-              ButtonStyle.Primary
-            );
-
-
-        const inviteLeaderboardButton =
-          new ButtonBuilder()
-            .setCustomId(
-              "prophixy_invite_leaderboard"
-            )
-            .setLabel(
-              "Invite Leaderboard"
-            )
-            .setEmoji("🎁")
-            .setStyle(
-              ButtonStyle.Success
-            );
-
-
-        const leaderboardRow =
-          new ActionRowBuilder()
-            .addComponents(
-              leaderboardButton,
-              inviteLeaderboardButton
-            );
-
-
-        // =====================================================
-        // UPDATE EXISTING LEADERBOARD PANEL
-        // =====================================================
-
-        const existingLeaderboardMessages =
-          await leaderboardChannel.messages.fetch({
+        // Update the existing panel message when possible.
+        // This prevents /panel from creating duplicate messages.
+        const upsertPanelMessage = async (channel, title, payload, customId = null) => {
+          const messages = await channel.messages.fetch({
             limit: 50
           });
 
-        const existingLeaderboardMessage =
-          existingLeaderboardMessages.find(
-            message =>
-              message.author.id === client.user.id &&
-              message.embeds.some(
-                embed =>
-                  embed.title ===
-                  "🏆 Prophixy PHX Leaderboard"
+          const existingMessage = messages.find(message => {
+            if (message.author.id !== client.user.id) {
+              return false;
+            }
+
+            const titleMatches = message.embeds.some(
+              embed => embed.title === title
+            );
+
+            const buttonMatches = customId && message.components.some(
+              row => row.components.some(
+                component => component.customId === customId
               )
-          );
-
-        if (existingLeaderboardMessage) {
-
-          await existingLeaderboardMessage.edit({
-            embeds: [leaderboardEmbed],
-            components: [leaderboardRow]
-          });
-
-          console.log(
-            "♻️ Updated existing PHX leaderboard panel."
-          );
-
-        } else {
-
-          await leaderboardChannel.send({
-            embeds: [leaderboardEmbed],
-            components: [leaderboardRow]
-          });
-
-          console.log(
-            "🆕 Created PHX leaderboard panel."
-          );
-
-        }
-
-
-        // =====================================================
-          // =====================================================
-          // AI ANALYSIS CHANNEL
-          // =====================================================
-
-          let aiAnalysisChannel =
-            guild.channels.cache.find(
-              channel =>
-                channel.type === ChannelType.GuildText &&
-                channel.name === "🤖・ai-analysis"
             );
 
-          if (!aiAnalysisChannel) {
-            aiAnalysisChannel =
-              await guild.channels.create({
-                name: "🤖・ai-analysis",
-                type: ChannelType.GuildText
-              });
+            return titleMatches || buttonMatches;
+          });
 
-            console.log(
-              `✅ Created #${aiAnalysisChannel.name}`
-            );
+          if (existingMessage) {
+            await existingMessage.edit(payload);
+            console.log(`♻️ Updated panel: ${title}`);
+          } else {
+            await channel.send(payload);
+            console.log(`🆕 Created panel: ${title}`);
           }
+        };
 
-          const aiAnalysisEmbed =
-            new EmbedBuilder()
-              .setColor(0x0099FF)
-              .setTitle("🤖 Prophixy AI Analysis")
-              .setDescription(
-                "Use Prophixy's AI to analyze football matches and cryptocurrencies.\\n\\n" +
-                "⚽ **Football Analysis** — Analyze a verified football fixture.\\n" +
-                "🪙 **Crypto Analysis** — Analyze a cryptocurrency using available market data.\\n\\n" +
-                "🔐 Access is controlled by roles configured by this server's administrators.\\n\\n" +
-                "⚠️ AI analysis provides estimates and educational information. It does not guarantee outcomes or provide financial advice."
-              )
-              .setFooter({
-                text: "Prophixy AI Analysis • Per-server access control"
-              });
+        // Create or find all six dedicated feature channels.
+        const profileChannel =
+          await getOrCreateTextChannel("👤・profile");
 
-          const aiAnalysisButton =
+        const leaderboardChannel =
+          await getOrCreateTextChannel("🏆・phx-leaderboard");
+
+        const inviteChannel =
+          await getOrCreateTextChannel("🎁・invite-panel");
+
+        const walletChannel =
+          await getOrCreateTextChannel("🔐・wallet-verification");
+
+        const supportChannel =
+          await getOrCreateTextChannel("🎫・support");
+
+        const aiAnalysisChannel =
+          await getOrCreateTextChannel("🤖・ai-analysis");
+
+        // PROFILE PANEL
+        const profileEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("👤 PhorvaGuard Profile")
+          .setDescription(
+            "View your PhorvaGuard account information.\n\n" +
+            "Your profile shows:\n" +
+            "💰 PHX balance\n" +
+            "🏆 Wins\n" +
+            "❌ Losses\n" +
+            "📊 Predictions\n" +
+            "🎯 Accuracy\n" +
+            "🔥 Streak\n" +
+            "👥 Invites\n" +
+            "👛 Connected wallet\n" +
+            "🎖️ SBT role\n\n" +
+            "Click below to view your profile."
+          )
+          .setFooter({
+            text: "PhorvaGuard • Shape Africa's Future"
+          });
+
+        const profileRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("prophixy_profile")
+              .setLabel("View My Profile")
+              .setEmoji("👤")
+              .setStyle(ButtonStyle.Primary)
+          );
+
+        await upsertPanelMessage(
+          profileChannel,
+          "👤 PhorvaGuard Profile",
+          {
+            embeds: [profileEmbed],
+            components: [profileRow]
+          }
+        );
+
+        // PHX AND INVITE LEADERBOARD PANEL
+        const leaderboardEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("🏆 PhorvaGuard PHX Leaderboard")
+          .setDescription(
+            "See the top PHX holders in the PhorvaGuard community.\n\n" +
+            "Use the buttons below to view the PHX leaderboard or invite leaderboard."
+          )
+          .setFooter({
+            text: "PhorvaGuard • Shape Africa's Future"
+          });
+
+        const leaderboardRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("prophixy_leaderboard")
+              .setLabel("View PHX Leaderboard")
+              .setEmoji("🏆")
+              .setStyle(ButtonStyle.Primary),
+
+            new ButtonBuilder()
+              .setCustomId("prophixy_invite_leaderboard")
+              .setLabel("Invite Leaderboard")
+              .setEmoji("🎁")
+              .setStyle(ButtonStyle.Success)
+          );
+
+        await upsertPanelMessage(
+          leaderboardChannel,
+          "🏆 PhorvaGuard PHX Leaderboard",
+          {
+            embeds: [leaderboardEmbed],
+            components: [leaderboardRow]
+          }
+        );
+
+        // INVITE PANEL
+        const inviteEmbed = new EmbedBuilder()
+          .setColor(0x00B894)
+          .setTitle("🎁 PhorvaGuard Invite Program")
+          .setDescription(
+            "Invite people to join the PhorvaGuard community.\n\n" +
+            "Generate your personal invite link using the button below.\n\n" +
+            "Your existing invite rewards and tracking rules remain unchanged."
+          )
+          .setFooter({
+            text: "PhorvaGuard • Invite and grow the community"
+          });
+
+        const inviteRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("generate_prophixy_invite")
+              .setLabel("Generate My Invite")
+              .setEmoji("🎁")
+              .setStyle(ButtonStyle.Success)
+          );
+
+        await upsertPanelMessage(
+          inviteChannel,
+          "🎁 PhorvaGuard Invite Program",
+          {
+            embeds: [inviteEmbed],
+            components: [inviteRow]
+          },
+          "generate_prophixy_invite"
+        );
+
+        // WALLET VERIFICATION PANEL
+        // This links to the existing verification website.
+        const walletEmbed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle("🔐 PhorvaGuard Wallet Verification")
+          .setDescription(
+            "Connect your wallet through the official PhorvaGuard verification page.\n\n" +
+            "Use the button below to open the existing wallet verification service."
+          )
+          .setFooter({
+            text: "PhorvaGuard • Wallet and SBT Verification"
+          });
+
+        const walletRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setLabel("Verify Wallet")
+              .setEmoji("🔐")
+              .setStyle(ButtonStyle.Link)
+              .setURL("https://prophixy-verify.onrender.com")
+          );
+
+        await upsertPanelMessage(
+          walletChannel,
+          "🔐 PhorvaGuard Wallet Verification",
+          {
+            embeds: [walletEmbed],
+            components: [walletRow]
+          }
+        );
+
+        // SUPPORT PANEL
+        // A private ticket is created only after a user clicks this button.
+        const supportEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("🎫 PhorvaGuard Private Support")
+          .setDescription(
+            "Need help with PhorvaGuard?\n\n" +
+            "Click the button below to open a private support ticket.\n" +
+            "Your ticket will be visible to you and the configured support team."
+          )
+          .setFooter({
+            text: "PhorvaGuard • Community Support"
+          });
+
+        const supportRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("open_prophixy_ticket")
+              .setLabel("Open Ticket")
+              .setEmoji("🎫")
+              .setStyle(ButtonStyle.Primary)
+          );
+
+        await upsertPanelMessage(
+          supportChannel,
+          "🎫 PhorvaGuard Private Support",
+          {
+            embeds: [supportEmbed],
+            components: [supportRow]
+          },
+          "open_prophixy_ticket"
+        );
+
+        // AI ANALYSIS PANEL
+        const aiAnalysisEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("🤖 PhorvaGuard AI Analysis")
+          .setDescription(
+            "Use PhorvaGuard's AI to analyze football matches and cryptocurrencies.\n\n" +
+            "⚽ **Football Analysis** — Analyze a verified football fixture.\n" +
+            "🪙 **Crypto Analysis** — Analyze a cryptocurrency using available market data.\n\n" +
+            "🔐 Access is controlled by roles configured by this server's administrators.\n\n" +
+            "⚠️ AI analysis provides estimates and educational information. It does not guarantee outcomes or provide financial advice."
+          )
+          .setFooter({
+            text: "PhorvaGuard AI Analysis • Per-server access control"
+          });
+
+        const aiAnalysisRow = new ActionRowBuilder()
+          .addComponents(
             new ButtonBuilder()
               .setCustomId("prophixy_ai_analysis")
               .setLabel("AI Analysis")
               .setEmoji("🤖")
-              .setStyle(ButtonStyle.Primary);
+              .setStyle(ButtonStyle.Primary)
+          );
 
-          const aiAnalysisRow =
-            new ActionRowBuilder()
-              .addComponents(aiAnalysisButton);
-
-          const existingAIAnalysisMessages =
-            await aiAnalysisChannel.messages.fetch({
-              limit: 50
-            });
-
-          const existingAIAnalysisMessage =
-            existingAIAnalysisMessages.find(
-              message =>
-                message.author.id === client.user.id &&
-                message.embeds.some(
-                  embed =>
-                    embed.title === "🤖 Prophixy AI Analysis"
-                )
-            );
-
-          if (existingAIAnalysisMessage) {
-            await existingAIAnalysisMessage.edit({
-              embeds: [aiAnalysisEmbed],
-              components: [aiAnalysisRow]
-            });
-
-            console.log(
-              "♻️ Updated existing AI Analysis panel."
-            );
-          } else {
-            await aiAnalysisChannel.send({
-              embeds: [aiAnalysisEmbed],
-              components: [aiAnalysisRow]
-            });
-
-            console.log(
-              "🆕 Created AI Analysis panel."
-            );
+        await upsertPanelMessage(
+          aiAnalysisChannel,
+          "🤖 PhorvaGuard AI Analysis",
+          {
+            embeds: [aiAnalysisEmbed],
+            components: [aiAnalysisRow]
           }
+        );
 
-        // COMMUNITY PANEL
-        // =====================================================
+        // COMMUNITY ENTRY PANEL
+        // Profile and leaderboard remain in their dedicated channels.
+        const communityEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle("🔮 PhorvaGuard Community")
+          .setDescription(
+            "Predict Smarter. Decide Better. Shape Africa's Future.\n\n" +
+            "Use the dedicated channels for PhorvaGuard's features:\n\n" +
+            `👤 **Profile:** ${profileChannel}\n` +
+            `🏆 **PHX Leaderboard:** ${leaderboardChannel}\n` +
+            `🎁 **Invite Program:** ${inviteChannel}\n` +
+            `🔐 **Wallet Verification:** ${walletChannel}\n` +
+            `🎫 **Private Support:** ${supportChannel}\n` +
+            `🤖 **AI Analysis:** ${aiAnalysisChannel}`
+          )
+          .setFooter({
+            text: "PhorvaGuard • Shape Africa's Future"
+          });
 
-        const embed =
-          new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle(
-              "🔮 Prophixy Community"
-            )
-            .setDescription(
-              "Predict Smarter. Decide Better. Shape Africa's Future.\n\n" +
-              "Use the buttons below to access Prophixy features.\n\n" +
-              "👤 **Profile** — View your Prophixy account\n" +
-              "🏆 **PHX Leaderboard** — See the top PHX holders\n" +
-              "🎁 **Generate Invite** — Create your personal invite\n" +
-              "🔐 **Verify Wallet** — Verify your Prophixy SBT\n" +
-              "🤖 **AI Analysis** — Analyze football matches and cryptocurrencies\n" +
-              "🎫 **Support** — Open a private support ticket"
-            )
-            .setFooter({
-              text:
-                "Prophixy • Shape Africa's Future"
-            })
-            .setTimestamp();
+        const communityRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId("generate_prophixy_invite")
+              .setLabel("Generate Invite")
+              .setEmoji("🎁")
+              .setStyle(ButtonStyle.Success),
 
+            new ButtonBuilder()
+              .setLabel("Verify Wallet")
+              .setEmoji("🔐")
+              .setStyle(ButtonStyle.Link)
+              .setURL("https://prophixy-verify.onrender.com"),
 
-        // NOTE:
-        // Profile and Leaderboard are intentionally
-        // NOT placed in this community panel.
-        //
-        // They have their own separate channels.
+            new ButtonBuilder()
+              .setLabel("AI Analysis")
+              .setEmoji("🤖")
+              .setStyle(ButtonStyle.Link)
+              .setURL(
+                `https://discord.com/channels/${guild.id}/${aiAnalysisChannel.id}`
+              ),
 
+            new ButtonBuilder()
+              .setCustomId("open_prophixy_ticket")
+              .setLabel("Support")
+              .setEmoji("🎫")
+              .setStyle(ButtonStyle.Primary)
+          );
 
-        const row =
-          new ActionRowBuilder()
-            .addComponents(
-
-              new ButtonBuilder()
-                .setCustomId(
-                  "generate_prophixy_invite"
-                )
-                .setLabel(
-                  "Generate Invite"
-                )
-                .setEmoji("🎁")
-                .setStyle(
-                  ButtonStyle.Success
-                ),
-
-              new ButtonBuilder()
-                .setLabel(
-                  "Verify Wallet"
-                )
-                .setEmoji("🔐")
-                .setStyle(
-                  ButtonStyle.Link
-                )
-                .setURL(
-                  "https://prophixy-verify.onrender.com"
-                ),
-
-              new ButtonBuilder()
-                .setLabel(
-                  "AI Analysis"
-                )
-                .setEmoji("🤖")
-                .setStyle(
-                  ButtonStyle.Link
-                )
-                .setURL(
-                  `https://discord.com/channels/${guild.id}/${aiAnalysisChannel.id}`
-                ),
-
-              new ButtonBuilder()
-                .setCustomId(
-                  "open_prophixy_ticket"
-                )
-                .setLabel(
-                  "Support"
-                )
-                .setEmoji("🎫")
-                .setStyle(
-                  ButtonStyle.Primary
-                )
-
-            );
-
-
-        await interaction.channel.send({
-          embeds: [embed],
-          components: [row]
-        });
-
+        await upsertPanelMessage(
+          interaction.channel,
+          "🔮 PhorvaGuard Community",
+          {
+            embeds: [communityEmbed],
+            components: [communityRow]
+          }
+        );
 
         await interaction.editReply({
           content:
-            `✅ Prophixy panels created.\n\n` +
+            "✅ PhorvaGuard panels are ready.\n\n" +
             `👤 Profile: ${profileChannel}\n` +
             `🏆 Leaderboard: ${leaderboardChannel}\n` +
-              `🤖 AI Analysis: ${aiAnalysisChannel}\n` +
+            `🎁 Invite: ${inviteChannel}\n` +
+            `🔐 Wallet Verification: ${walletChannel}\n` +
+            `🎫 Support: ${supportChannel}\n` +
+            `🤖 AI Analysis: ${aiAnalysisChannel}\n` +
             `🔮 Community panel: ${interaction.channel}`
         });
 
-
       } catch (error) {
-
         console.error(
           "❌ Community panel creation error:",
           error
@@ -3197,16 +3142,13 @@ ${user.sbt?.role || "Not Verified"}`
 
         await interaction.editReply({
           content:
-            "❌ Could not create the Prophixy panels."
+            "❌ Could not create or update all PhorvaGuard panels. Check the bot logs for details."
         }).catch(() => {});
-
       }
 
       return;
     }
 
-
-    // =====================================================
     // ADMIN ROLE STATISTICS
     // =====================================================
 
@@ -3238,7 +3180,7 @@ ${user.sbt?.role || "Not Verified"}`
         if (!guild) {
           return interaction.editReply({
             content:
-              "❌ This command can only be used inside the Prophixy server."
+              "❌ This command can only be used inside the PhorvaGuard server."
           });
         }
 
@@ -3260,7 +3202,7 @@ ${user.sbt?.role || "Not Verified"}`
           new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle(
-              "📊 Prophixy Discord Role Statistics"
+              "📊 PhorvaGuard Discord Role Statistics"
             )
             .setDescription(
               lines.length
@@ -3330,14 +3272,14 @@ ${user.sbt?.role || "Not Verified"}`
         if (!user) {
           return interaction.editReply({
             content:
-              `❌ <@${target.id}> does not have a Prophixy account yet.`
+              `❌ <@${target.id}> does not have a PhorvaGuard account yet.`
           });
         }
 
         const embed =
           new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle("👤 Prophixy Admin Profile")
+            .setTitle("👤 PhorvaGuard Admin Profile")
             .setThumbnail(target.displayAvatarURL())
             .addFields(
               {
@@ -3400,7 +3342,7 @@ ${user.sbt?.role || "Not Verified"}`
               }
             )
             .setFooter({
-              text: "Prophixy • Admin View"
+              text: "PhorvaGuard • Admin View"
             })
             .setTimestamp();
 
@@ -3549,7 +3491,7 @@ ${user.sbt?.role || "Not Verified"}`
         if (!user) {
           return interaction.editReply({
             content:
-              `❌ <@${target.id}> does not have a Prophixy account yet.`
+              `❌ <@${target.id}> does not have a PhorvaGuard account yet.`
           });
         }
 
@@ -3910,7 +3852,7 @@ ${user.sbt?.role || "Not Verified"}`
 
         return interaction.editReply({
           content:
-            `🤖 **Prophixy AI Market Suggestions**\n\n` +
+            `🤖 **PhorvaGuard AI Market Suggestions**\n\n` +
             `**Subject:** ${subject}\n\n` +
             `${formatted}\n\n` +
             `👇 **Select ONE suggestion below to continue.**\n` +
@@ -4487,7 +4429,7 @@ async function handleGenerateInvite(interaction) {
     if (!guild) {
       return interaction.editReply({
         content:
-          "❌ This button can only be used inside the Prophixy server."
+          "❌ This button can only be used inside the PhorvaGuard server."
       });
     }
 
@@ -4529,7 +4471,7 @@ async function handleGenerateInvite(interaction) {
       maxAge: 7 * 24 * 60 * 60,
       maxUses: 0,
       unique: true,
-      reason: `Prophixy invite for ${interaction.user.tag}`
+      reason: `PhorvaGuard invite for ${interaction.user.tag}`
     });
 
     console.log(`✅ Invite created: ${invite.code}`);
@@ -4560,7 +4502,7 @@ async function handleGenerateInvite(interaction) {
       dbUser.inviteExpiresAt =
         expiresAt;
 
-      // Save the exact Prophixy owner of this invite.
+      // Save the exact PhorvaGuard owner of this invite.
       // Discord may report the bot as the technical
       // inviter, so this mapping identifies the real user.
       db.data.inviteLinks ||= [];
@@ -4578,7 +4520,7 @@ async function handleGenerateInvite(interaction) {
 
     await interaction.editReply({
       content:
-`# 🔗 Your Prophixy Invite
+`# 🔗 Your PhorvaGuard Invite
 
 Your unique invite is ready:
 
@@ -4646,7 +4588,7 @@ async function handleOpenTicket(interaction) {
 
     if (!guild) {
       return interaction.reply({
-        content: "❌ This can only be used inside the Prophixy server.",
+        content: "❌ This can only be used inside the PhorvaGuard server.",
         flags: MessageFlags.Ephemeral
       });
     }
@@ -4733,15 +4675,15 @@ async function handleOpenTicket(interaction) {
       .addComponents(closeButton);
 
     const embed = new EmbedBuilder()
-      .setTitle("🎫 Prophixy Support Ticket")
+      .setTitle("🎫 PhorvaGuard Support Ticket")
       .setDescription(
         `Hello ${interaction.user} 👋\n\n` +
-        "A member of the Prophixy team will assist you shortly.\n\n" +
+        "A member of the PhorvaGuard team will assist you shortly.\n\n" +
         "Please describe your issue clearly and provide any relevant information.\n\n" +
         "🔒 When your issue has been resolved, use the **Close Ticket** button."
       )
       .setFooter({
-        text: "Prophixy Support"
+        text: "PhorvaGuard Support"
       })
       .setTimestamp();
 
@@ -4793,7 +4735,7 @@ async function handleCloseTicket(interaction) {
     // Make sure this is one of our tickets
     if (!channel.topic?.startsWith("prophixy-ticket:")) {
       return interaction.reply({
-        content: "❌ This is not a Prophixy ticket.",
+        content: "❌ This is not a PhorvaGuard ticket.",
         flags: MessageFlags.Ephemeral
       });
     }
@@ -4816,7 +4758,7 @@ async function handleCloseTicket(interaction) {
 
     if (!isOwner && !isStaff) {
       return interaction.reply({
-        content: "❌ Only the ticket owner or Prophixy staff can close this ticket.",
+        content: "❌ Only the ticket owner or PhorvaGuard staff can close this ticket.",
         flags: MessageFlags.Ephemeral
       });
     }
@@ -4833,7 +4775,7 @@ async function handleCloseTicket(interaction) {
 
       try {
         await channel.delete(
-          `Prophixy ticket closed by ${interaction.user.tag}`
+          `PhorvaGuard ticket closed by ${interaction.user.tag}`
         );
       } catch (error) {
         console.error(
@@ -4889,8 +4831,8 @@ client.on(Events.MessageCreate, async (message) => {
       return;
     }
 
-    // Only accept gprophixy / Gprophixy
-    if (message.content.trim().toLowerCase() !== "gprophixy") {
+    // Only accept gphorva / Gphorva (case-insensitive)
+    if (message.content.trim().toLowerCase() !== "gphorva") {
       return;
     }
 

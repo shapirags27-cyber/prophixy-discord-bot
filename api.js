@@ -19,7 +19,7 @@ module.exports = (client) => {
   app.get("/health", (req, res) => {
     res.json({
       status: "ok",
-      service: "Prophixy Discord Bot API",
+      service: "PhorvaGuard Discord Bot API",
       bot: client.user?.tag || "starting"
     });
   });

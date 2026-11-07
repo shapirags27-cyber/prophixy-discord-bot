@@ -9,7 +9,7 @@ module.exports = {
 
   data: new SlashCommandBuilder()
     .setName("invite-panel")
-    .setDescription("Post the Prophixy invite panel"),
+    .setDescription("Post the PhorvaGuard invite panel"),
 
   async execute(interaction) {
 
@@ -36,9 +36,9 @@ module.exports = {
 
       await channel.send({
         content:
-`# 🎁 Prophixy Invite Program
+`# 🎁 PhorvaGuard Invite Program
 
-Invite your friends to **Prophixy** and earn PHX.
+Invite your friends to **PhorvaGuard** and earn PHX.
 
 ### How it works
 1. Click **Generate My Invite**

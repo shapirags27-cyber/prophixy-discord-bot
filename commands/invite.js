@@ -8,7 +8,7 @@ module.exports = {
 
   data: new SlashCommandBuilder()
     .setName("invite")
-    .setDescription("Get your Prophixy Discord invite link"),
+    .setDescription("Get your PhorvaGuard Discord invite link"),
 
   async execute(interaction) {
 
@@ -18,7 +18,7 @@ module.exports = {
 
       if (!guild) {
         return interaction.reply({
-          content: "❌ This command can only be used inside the Prophixy Discord server.",
+          content: "❌ This command can only be used inside the PhorvaGuard Discord server.",
           ephemeral: true
         });
       }
@@ -47,10 +47,10 @@ module.exports = {
           maxUses: 0,
           unique: true,
           reason:
-            `Prophixy invite requested by ${interaction.user.tag}`
+            `PhorvaGuard invite requested by ${interaction.user.tag}`
         });
 
-      // Remember which Prophixy user owns this invite link.
+      // Remember which PhorvaGuard user owns this invite link.
       // Discord sees the bot as the technical invite creator,
       // so we keep our own owner mapping.
       await db.read();
@@ -75,13 +75,13 @@ module.exports = {
 
       await interaction.reply({
         content:
-`# 🔗 Your Prophixy Invite
+`# 🔗 Your PhorvaGuard Invite
 
 Share this invite with your friends:
 
 ${invite.url}
 
-👥 When someone joins through your invite, it will count toward your Prophixy invite total.
+👥 When someone joins through your invite, it will count toward your PhorvaGuard invite total.
 
 ⭐ Successful invite reward: **+10 PHX**`,
         ephemeral: true

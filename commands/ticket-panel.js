@@ -9,15 +9,15 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("ticket-panel")
-    .setDescription("Post the Prophixy support ticket panel"),
+    .setDescription("Post the PhorvaGuard support ticket panel"),
 
   async execute(interaction) {
 
     const embed = new EmbedBuilder()
-      .setTitle("🎫 Prophixy Support")
+      .setTitle("🎫 PhorvaGuard Support")
       .setDescription(
-        "Need help with Prophixy?\n\n" +
-        "You can open a private ticket to talk directly with the Prophixy team or moderators.\n\n" +
+        "Need help with PhorvaGuard?\n\n" +
+        "You can open a private ticket to talk directly with the PhorvaGuard team or moderators.\n\n" +
         "You can use a ticket for:\n" +
         "• Account issues\n" +
         "• Prediction issues\n" +
@@ -25,10 +25,10 @@ module.exports = {
         "• Wallet issues\n" +
         "• Market issues\n" +
         "• Reports or other private matters\n\n" +
-        "🔒 Your ticket will only be visible to you and Prophixy staff."
+        "🔒 Your ticket will only be visible to you and PhorvaGuard staff."
       )
       .setFooter({
-        text: "Prophixy • Shape Africa’s Future"
+        text: "PhorvaGuard • Shape Africa’s Future"
       });
 
     const button = new ButtonBuilder()

@@ -563,13 +563,23 @@ async function getCryptoOHLC(coinId, days = 30) {
 }
 
 async function getCryptoMarketData(query) {
-  const cleanQuery = cleanCoinQuery(query);
+  const providedCoin =
+    query && typeof query === "object" && query.id
+      ? query
+      : null;
+
+  const cleanQuery = cleanCoinQuery(
+    providedCoin?.symbol ||
+    providedCoin?.name ||
+    providedCoin?.id ||
+    query
+  );
 
   if (!cleanQuery) {
     throw new Error("A cryptocurrency name or symbol is required.");
   }
 
-  const cacheKey = normalize(cleanQuery);
+  const cacheKey = normalize(providedCoin?.id || cleanQuery);
   const cached = marketCache.get(cacheKey);
 
   if (
@@ -583,7 +593,7 @@ async function getCryptoMarketData(query) {
     return cached.data;
   }
 
-  const coin = await searchCoin(cleanQuery);
+  const coin = providedCoin || await searchCoin(cleanQuery);
 
   if (!coin?.id) {
     throw new Error(

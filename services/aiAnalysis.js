@@ -69,7 +69,7 @@ async function generateFootballAnalysis(ai, prompt) {
 }
 
 /**
- * Prophixy AI Analysis
+ * PhorvaGuard AI Analysis
  *
  * This service:
  * - DOES NOT create prediction markets.
@@ -126,7 +126,7 @@ async function analyzeFootball({
       : null;
 
   const prompt = `
-You are Prophixy's football analysis engine.
+You are PhorvaGuard's football analysis engine.
 
 Your job is to produce a DEEP, DATA-DRIVEN analysis of the verified football fixture supplied below.
 
@@ -519,7 +519,7 @@ async function analyzeCrypto({
   };
 
   const prompt = `
-You are Prophixy's cryptocurrency analysis engine.
+You are PhorvaGuard's cryptocurrency analysis engine.
 
 Analyze the supplied cryptocurrency information.
 

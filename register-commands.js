@@ -13,7 +13,7 @@ const commands = [
   // ===========================
   new SlashCommandBuilder()
     .setName("panel")
-    .setDescription("Post the Prophixy community panel"),
+    .setDescription("Post the PhorvaGuard community panel"),
   // ===========================
   // CONNECT WALLET
   // ===========================
@@ -47,7 +47,7 @@ const commands = [
   // ===========================
   new SlashCommandBuilder()
     .setName("admin-profile")
-    .setDescription("View a member's Prophixy profile")
+    .setDescription("View a member's PhorvaGuard profile")
     .addUserOption(option =>
       option
         .setName("user")
@@ -223,7 +223,7 @@ const commands = [
   // ===========================
   new SlashCommandBuilder()
     .setName("ai-panel")
-    .setDescription("Create or update the Prophixy AI Analysis panel"),
+    .setDescription("Create or update the PhorvaGuard AI Analysis panel"),
 
 ].map(command => command.toJSON());
 
@@ -237,9 +237,8 @@ const rest = new REST({ version: "10" })
     console.log("Registering slash commands...");
 
     await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
+      Routes.applicationCommands(
+        process.env.CLIENT_ID
       ),
       { body: commands }
     );

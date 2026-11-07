@@ -5,5 +5,5 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("wallet-panel")
-    .setDescription("Post the Prophixy wallet verification panel")
+    .setDescription("Post the PhorvaGuard wallet verification panel")
 };
