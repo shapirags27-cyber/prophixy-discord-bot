@@ -1,4 +1,5 @@
 require("dotenv").config();
+const fs = require("fs");
 
 const {
   Client,
@@ -28,6 +29,7 @@ const {
 } = require("./services/database");
 
 const { verifySBT } = require("./services/sbt");
+const { addPHX } = require("./services/phxRewards");
 
 const {
   MARKET_CREATION_FEE
@@ -88,6 +90,21 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
+
+// PhorvaGuard role permissions
+function memberHasNamedRole(member, names) {
+  const wanted = new Set(names.map(name => name.toLowerCase()));
+  return Boolean(member?.roles?.cache?.some(role =>
+    wanted.has(role.name.toLowerCase())
+  ));
+}
+
+function isSeniorGuardianOrAdmin(member) {
+  return Boolean(
+    member?.permissions?.has(PermissionFlagsBits.Administrator) ||
+    memberHasNamedRole(member, ["Senior Guardian"])
+  );
+}
 
 // Start the HTTP API used by prophixy-verify.onrender.com
 require("./api")(client);
@@ -418,7 +435,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       if (interaction.customId === "prophixy_profile") {
 
-        await interaction.deferReply();
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral
+        });
 
         try {
 
@@ -621,69 +640,20 @@ ${user.sbt?.role || "Not Verified"}`
 
 
       // =====================================================
+      // CLAIM SUPPORT TICKET
+      // =====================================================
+
+      if (interaction.customId === "claim_prophixy_ticket") {
+        await handleClaimTicket(interaction);
+        return;
+      }
+
+      // =====================================================
       // CLOSE SUPPORT TICKET
       // =====================================================
 
       if (interaction.customId === "close_prophixy_ticket") {
-
-        try {
-
-          const channel = interaction.channel;
-
-          if (
-            !channel ||
-            channel.type !== ChannelType.GuildText
-          ) {
-
-            await interaction.reply({
-              content:
-                "❌ This is not a ticket channel.",
-              flags: MessageFlags.Ephemeral
-            }).catch(() => {});
-
-            return;
-          }
-
-          await interaction.reply({
-            content:
-              "🔒 Ticket closed. This channel will be deleted in 5 seconds.",
-            flags: MessageFlags.Ephemeral
-          }).catch(() => {});
-
-          console.log(
-            `🔒 Closing ticket #${channel.name} for ${interaction.user.tag}`
-          );
-
-          setTimeout(async () => {
-
-            await channel.delete(
-              "PhorvaGuard support ticket closed"
-            ).then(() => {
-
-              console.log(
-                `🗑️ Ticket deleted: #${channel.name}`
-              );
-
-            }).catch(error => {
-
-              console.error(
-                "❌ Could not delete ticket:",
-                error
-              );
-
-            });
-
-          }, 5000);
-
-        } catch (error) {
-
-          console.error(
-            "❌ Ticket close error:",
-            error
-          );
-
-        }
-
+        await handleCloseTicket(interaction);
         return;
       }
 
@@ -2610,12 +2580,7 @@ ${user.sbt?.role || "Not Verified"}`
         interaction.commandName === "ai-panel"
       ) {
 
-        if (
-          !interaction.member ||
-          !interaction.member.permissions.has(
-            PermissionFlagsBits.Administrator
-          )
-        ) {
+        if (!isSeniorGuardianOrAdmin(interaction.member)) {
           return interaction.reply({
             content:
               "❌ You don't have permission to use the AI Analysis panel command.",
@@ -2760,12 +2725,7 @@ ${user.sbt?.role || "Not Verified"}`
     // =====================================================
 
     if (interaction.commandName === "panel") {
-      if (
-        !interaction.member ||
-        !interaction.member.permissions.has(
-          PermissionFlagsBits.Administrator
-        )
-      ) {
+      if (!isSeniorGuardianOrAdmin(interaction.member)) {
         return interaction.reply({
           content:
             "❌ You don't have permission to use the PhorvaGuard panel command.",
@@ -2859,6 +2819,54 @@ ${user.sbt?.role || "Not Verified"}`
 
         const aiAnalysisChannel =
           await getOrCreateTextChannel("🤖・ai-analysis");
+
+        // DAILY CHECK-IN CHANNEL
+        let dailyCheckInChannel = null;
+        const configuredCheckInId =
+          process.env.DAILY_CHECKIN_CHANNEL_ID;
+
+        if (configuredCheckInId) {
+          dailyCheckInChannel = await guild.channels
+            .fetch(configuredCheckInId)
+            .catch(() => null);
+        }
+
+        if (
+          !dailyCheckInChannel ||
+          dailyCheckInChannel.type !== ChannelType.GuildText
+        ) {
+          dailyCheckInChannel =
+            await getOrCreateTextChannel("🔥・daily-check-in");
+
+          const envPath = ".env";
+          let envContent = fs.existsSync(envPath)
+            ? fs.readFileSync(envPath, "utf8")
+            : "";
+
+          const setting =
+            `DAILY_CHECKIN_CHANNEL_ID=${dailyCheckInChannel.id}`;
+
+          if (/^DAILY_CHECKIN_CHANNEL_ID=.*$/m.test(envContent)) {
+            envContent = envContent.replace(
+              /^DAILY_CHECKIN_CHANNEL_ID=.*$/m,
+              setting
+            );
+          } else {
+            envContent =
+              envContent.replace(/\s*$/, "") +
+              (envContent.trim() ? "\n" : "") +
+              setting +
+              "\n";
+          }
+
+          fs.writeFileSync(envPath, envContent);
+          process.env.DAILY_CHECKIN_CHANNEL_ID =
+            dailyCheckInChannel.id;
+
+          console.log(
+            `Daily check-in channel configured: ${dailyCheckInChannel.id}`
+          );
+        }
 
         // PROFILE PANEL
         const profileEmbed = new EmbedBuilder()
@@ -3065,6 +3073,29 @@ ${user.sbt?.role || "Not Verified"}`
           }
         );
 
+        // DAILY CHECK-IN PANEL
+        const dailyCheckInEmbed = new EmbedBuilder()
+          .setColor(0x00B894)
+          .setTitle("🔥 PhorvaGuard Daily Check-In")
+          .setDescription(
+            "Send **gphorva** in this channel once every 24 hours.\\n\\n" +
+            "🔥 Each successful check-in advances your progress.\\n" +
+            "🎁 Complete 7 check-ins to receive **5 PHX**.\\n" +
+            "🔄 Your progress resets after the 7th successful check-in.\\n\\n" +
+            "⏳ You must wait 24 hours between successful check-ins."
+          )
+          .setFooter({
+            text: "PhorvaGuard • Daily Community Rewards"
+          });
+
+        await upsertPanelMessage(
+          dailyCheckInChannel,
+          "🔥 PhorvaGuard Daily Check-In",
+          {
+            embeds: [dailyCheckInEmbed]
+          }
+        );
+
         // COMMUNITY ENTRY PANEL
         // Profile and leaderboard remain in their dedicated channels.
         const communityEmbed = new EmbedBuilder()
@@ -3078,7 +3109,8 @@ ${user.sbt?.role || "Not Verified"}`
             `🎁 **Invite Program:** ${inviteChannel}\n` +
             `🔐 **Wallet Verification:** ${walletChannel}\n` +
             `🎫 **Private Support:** ${supportChannel}\n` +
-            `🤖 **AI Analysis:** ${aiAnalysisChannel}`
+            `🤖 **AI Analysis:** ${aiAnalysisChannel}\n` +
+            `🔥 **Daily Check-In:** ${dailyCheckInChannel}`
           )
           .setFooter({
             text: "PhorvaGuard • Shape Africa's Future"
@@ -3131,6 +3163,7 @@ ${user.sbt?.role || "Not Verified"}`
             `🔐 Wallet Verification: ${walletChannel}\n` +
             `🎫 Support: ${supportChannel}\n` +
             `🤖 AI Analysis: ${aiAnalysisChannel}\n` +
+            `🔥 Daily Check-In: ${dailyCheckInChannel}\n` +
             `🔮 Community panel: ${interaction.channel}`
         });
 
@@ -3156,12 +3189,7 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.commandName === "role-stats"
     ) {
 
-      if (
-        !interaction.member ||
-        !interaction.member.permissions.has(
-          PermissionFlagsBits.Administrator
-        )
-      ) {
+      if (!isSeniorGuardianOrAdmin(interaction.member)) {
         return interaction.reply({
           content:
             "❌ You don't have permission to use this command.",
@@ -3244,12 +3272,7 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.commandName === "admin-profile"
     ) {
 
-      if (
-        !interaction.member ||
-        !interaction.member.permissions.has(
-          PermissionFlagsBits.Administrator
-        )
-      ) {
+      if (!isSeniorGuardianOrAdmin(interaction.member)) {
         return interaction.reply({
           content:
             "❌ You don't have permission to use this command.",
@@ -3373,12 +3396,7 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.commandName === "add-phx"
     ) {
 
-      if (
-        !interaction.member ||
-        !interaction.member.permissions.has(
-          PermissionFlagsBits.Administrator
-        )
-      ) {
+      if (!isSeniorGuardianOrAdmin(interaction.member)) {
         return interaction.reply({
           content:
             "❌ You don't have permission to use this command.",
@@ -3460,12 +3478,7 @@ ${user.sbt?.role || "Not Verified"}`
       interaction.commandName === "remove-phx"
     ) {
 
-      if (
-        !interaction.member ||
-        !interaction.member.permissions.has(
-          PermissionFlagsBits.Administrator
-        )
-      ) {
+      if (!isSeniorGuardianOrAdmin(interaction.member)) {
         return interaction.reply({
           content:
             "❌ You don't have permission to use this command.",
@@ -4581,52 +4594,55 @@ Your unique invite is ready:
 // ==============================
 
 async function handleOpenTicket(interaction) {
+  let ticketChannel = null;
 
   try {
-
     const guild = interaction.guild;
 
     if (!guild) {
-      return interaction.reply({
-        content: "❌ This can only be used inside the PhorvaGuard server.",
-        flags: MessageFlags.Ephemeral
+      return interaction.editReply({
+        content: "❌ This can only be used inside the PhorvaGuard server."
       });
     }
 
-    // Prevent users from opening multiple tickets
-    const existingTicket = guild.channels.cache.find(
-      channel =>
-        channel.type === ChannelType.GuildText &&
-        channel.topic === `prophixy-ticket:${interaction.user.id}`
-    );
+    // Prevent multiple open tickets for the same member.
+    const existingTicket = guild.channels.cache.find(channel => {
+      if (
+        channel.type !== ChannelType.GuildText ||
+        !channel.topic?.startsWith("prophixy-ticket:")
+      ) return false;
+
+      const ownerId = channel.topic
+        .split("|")[0]
+        .slice("prophixy-ticket:".length);
+
+      return ownerId === interaction.user.id;
+    });
 
     if (existingTicket) {
-      return interaction.reply({
-        content: `❌ You already have an open ticket: ${existingTicket}`,
-        flags: MessageFlags.Ephemeral
+      return interaction.editReply({
+        content: `❌ You already have an open ticket: ${existingTicket}`
       });
     }
 
-    // Find staff roles
+    // These roles can view tickets. Mod and Team remain for compatibility.
     const staffRoleNames = [
+      "Phorva Guardian",
+      "Senior Guardian",
       "Mod",
       "Team"
     ];
 
-    const staffRoles = guild.roles.cache.filter(
-      role =>
-        staffRoleNames.some(
-          name => role.name.toLowerCase() === name.toLowerCase()
-        )
+    const staffRoles = guild.roles.cache.filter(role =>
+      staffRoleNames.some(
+        name => role.name.toLowerCase() === name.toLowerCase()
+      )
     );
 
-    // Ticket permissions
     const permissionOverwrites = [
       {
         id: guild.id,
-        deny: [
-          PermissionFlagsBits.ViewChannel
-        ]
+        deny: [PermissionFlagsBits.ViewChannel]
       },
       {
         id: interaction.user.id,
@@ -4638,9 +4654,7 @@ async function handleOpenTicket(interaction) {
       }
     ];
 
-    // Give staff access
     for (const role of staffRoles.values()) {
-
       permissionOverwrites.push({
         id: role.id,
         allow: [
@@ -4649,21 +4663,25 @@ async function handleOpenTicket(interaction) {
           PermissionFlagsBits.ReadMessageHistory
         ]
       });
-
     }
 
-    const ticketChannel = await guild.channels.create({
-      name: `ticket-${interaction.user.username}`
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "")
-        .slice(0, 90),
+    const safeUsername = interaction.user.username
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 80) || "member";
 
+    ticketChannel = await guild.channels.create({
+      name: `ticket-${safeUsername}`,
       type: ChannelType.GuildText,
-
       topic: `prophixy-ticket:${interaction.user.id}`,
-
       permissionOverwrites
     });
+
+    const claimButton = new ButtonBuilder()
+      .setCustomId("claim_prophixy_ticket")
+      .setLabel("Claim Ticket")
+      .setEmoji("🙋")
+      .setStyle(ButtonStyle.Success);
 
     const closeButton = new ButtonBuilder()
       .setCustomId("close_prophixy_ticket")
@@ -4672,45 +4690,119 @@ async function handleOpenTicket(interaction) {
       .setStyle(ButtonStyle.Danger);
 
     const row = new ActionRowBuilder()
-      .addComponents(closeButton);
+      .addComponents(claimButton, closeButton);
 
     const embed = new EmbedBuilder()
+      .setColor(0x0099FF)
       .setTitle("🎫 PhorvaGuard Support Ticket")
       .setDescription(
         `Hello ${interaction.user} 👋\n\n` +
-        "A member of the PhorvaGuard team will assist you shortly.\n\n" +
-        "Please describe your issue clearly and provide any relevant information.\n\n" +
-        "🔒 When your issue has been resolved, use the **Close Ticket** button."
+        "A member of the PhorvaGuard support team will assist you.\n\n" +
+        "Please describe your issue clearly and provide relevant information.\n\n" +
+        "🙋 Authorized Guardians can claim this ticket.\n" +
+        "🔒 The ticket owner or authorized staff can close it."
       )
-      .setFooter({
-        text: "PhorvaGuard Support"
-      })
+      .setFooter({ text: "PhorvaGuard Support" })
       .setTimestamp();
 
+    const roleMentions = staffRoles.map(role => `<@&${role.id}>`);
+
     await ticketChannel.send({
-      content: `${interaction.user} <@&${staffRoles.first()?.id || guild.id}>`,
+      content: [interaction.user.toString(), ...roleMentions].join(" "),
       embeds: [embed],
-      components: [row]
+      components: [row],
+      allowedMentions: {
+        users: [interaction.user.id],
+        roles: staffRoles.map(role => role.id)
+      }
     });
 
-    await interaction.reply({
-      content: `✅ Your private ticket has been created: ${ticketChannel}`,
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      content: `✅ Your private ticket has been created: ${ticketChannel}`
     });
 
     console.log(
-      `🎫 Ticket created for ${interaction.user.tag}: ${ticketChannel.name}`
+      `Ticket created for ${interaction.user.tag}: ${ticketChannel.name}`
     );
 
   } catch (error) {
+    console.error("Ticket creation error:", error);
 
-    console.error("❌ Ticket creation error:", error);
+    // If channel creation succeeded but sending the panel failed,
+    // keep the channel and report its location instead of hiding it.
+    const message = ticketChannel
+      ? `⚠️ Your ticket channel was created: ${ticketChannel}, but its welcome message could not be sent. Please contact staff.`
+      : "❌ Could not create your ticket. Please contact a moderator.";
+
+    await interaction.editReply({
+      content: message
+    }).catch(() => {});
+  }
+}
+
+// ==============================
+// CLAIM SUPPORT TICKET
+// ==============================
+
+async function handleClaimTicket(interaction) {
+  try {
+    const channel = interaction.channel;
+    const member = interaction.member;
+
+    if (
+      !channel ||
+      channel.type !== ChannelType.GuildText ||
+      !channel.topic?.startsWith("prophixy-ticket:")
+    ) {
+      return interaction.reply({
+        content: "❌ This is not a PhorvaGuard ticket.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    const canClaim =
+      Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator)) ||
+      memberHasNamedRole(member, [
+        "Phorva Guardian",
+        "Senior Guardian"
+      ]);
+
+    if (!canClaim) {
+      return interaction.reply({
+        content: "❌ Only Phorva Guardians, Senior Guardians, and Discord Administrators can claim tickets.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (channel.topic.includes("|claimed:")) {
+      const claimedBy = channel.topic.split("|claimed:")[1];
+
+      return interaction.reply({
+        content: `⚠️ This ticket has already been claimed by <@${claimedBy}>.`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    await channel.setTopic(
+      `${channel.topic}|claimed:${interaction.user.id}`
+    );
+
+    await interaction.reply({
+      content: `🙋 ${interaction.user} has claimed this support ticket.`
+    });
+
+    console.log(
+      `Ticket ${channel.name} claimed by ${interaction.user.tag}`
+    );
+
+  } catch (error) {
+    console.error("Ticket claim error:", error);
 
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: "❌ Could not create your ticket. Please contact a moderator.",
+        content: "❌ Could not claim this ticket.",
         flags: MessageFlags.Ephemeral
-      });
+      }).catch(() => {});
     }
   }
 }
@@ -4720,89 +4812,140 @@ async function handleOpenTicket(interaction) {
 // ==============================
 
 async function handleCloseTicket(interaction) {
-
   try {
-
     const channel = interaction.channel;
+    const member = interaction.member;
 
-    if (!channel || channel.type !== ChannelType.GuildText) {
-      return interaction.reply({
-        content: "❌ This is not a ticket channel.",
-        flags: MessageFlags.Ephemeral
-      });
-    }
-
-    // Make sure this is one of our tickets
-    if (!channel.topic?.startsWith("prophixy-ticket:")) {
+    if (
+      !channel ||
+      channel.type !== ChannelType.GuildText ||
+      !channel.topic?.startsWith("prophixy-ticket:")
+    ) {
       return interaction.reply({
         content: "❌ This is not a PhorvaGuard ticket.",
         flags: MessageFlags.Ephemeral
       });
     }
 
-    // Only the ticket owner or staff can close it
-    const ticketOwnerId =
-      channel.topic.split(":")[1];
+    const ticketOwnerId = channel.topic
+      .split("|")[0]
+      .slice("prophixy-ticket:".length);
 
-    const member = interaction.member;
+    const isOwner = interaction.user.id === ticketOwnerId;
 
-    const isOwner =
-      interaction.user.id === ticketOwnerId;
+    const isAuthorizedStaff =
+      Boolean(member?.permissions?.has(PermissionFlagsBits.Administrator)) ||
+      memberHasNamedRole(member, [
+        "Phorva Guardian",
+        "Senior Guardian",
+        "Mod",
+        "Team"
+      ]);
 
-    const isStaff =
-      member.roles.cache.some(role =>
-        ["mod", "team"].includes(
-          role.name.toLowerCase()
-        )
-      );
-
-    if (!isOwner && !isStaff) {
+    if (!isOwner && !isAuthorizedStaff) {
       return interaction.reply({
-        content: "❌ Only the ticket owner or PhorvaGuard staff can close this ticket.",
+        content: "❌ Only the ticket owner or authorized PhorvaGuard staff can close this ticket.",
         flags: MessageFlags.Ephemeral
       });
     }
 
     await interaction.reply({
       content: "🔒 This ticket will be closed in 5 seconds.",
+      flags: MessageFlags.Ephemeral
     });
 
     console.log(
-      `🔒 Ticket closed by ${interaction.user.tag}: ${channel.name}`
+      `Ticket closed by ${interaction.user.tag}: ${channel.name}`
     );
 
     setTimeout(async () => {
-
       try {
         await channel.delete(
           `PhorvaGuard ticket closed by ${interaction.user.tag}`
         );
       } catch (error) {
-        console.error(
-          "❌ Could not delete ticket:",
-          error
-        );
+        console.error("Could not delete ticket:", error);
       }
-
     }, 5000);
 
   } catch (error) {
-
-    console.error(
-      "❌ Close ticket error:",
-      error
-    );
+    console.error("Close ticket error:", error);
 
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: "❌ Could not close this ticket.",
         flags: MessageFlags.Ephemeral
-      });
+      }).catch(() => {});
     }
   }
 }
 
 // =====================================================
+// PHX MESSAGE REWARDS
+// =====================================================
+
+const messageRewardLocks = new Set();
+const MESSAGE_REWARD_COOLDOWN = 60 * 1000;
+
+client.on(Events.MessageCreate, async (message) => {
+  if (
+    message.author.bot ||
+    !message.guild ||
+    !message.content ||
+    !message.content.trim()
+  ) return;
+
+  const userId = message.author.id;
+
+  if (messageRewardLocks.has(userId)) return;
+  messageRewardLocks.add(userId);
+
+  try {
+    let user = await getUser(userId);
+
+    if (!user) {
+      user = await createUser(userId, message.author.username);
+    }
+
+    const now = Date.now();
+    const lastRewardAt = user.lastMessageRewardAt
+      ? new Date(user.lastMessageRewardAt).getTime()
+      : 0;
+
+    if (
+      Number.isFinite(lastRewardAt) &&
+      lastRewardAt > 0 &&
+      now - lastRewardAt < MESSAGE_REWARD_COOLDOWN
+    ) return;
+
+    const newBalance = await addPHX(userId, 1);
+
+    if (newBalance === null) {
+      console.error("Message reward skipped: user record not found.");
+      return;
+    }
+
+    user = await getUser(userId);
+    if (!user) return;
+
+    user.lastMessageRewardAt = new Date(now).toISOString();
+
+    if (!await updateUser(user)) {
+      console.error("Could not save message reward timestamp:", userId);
+      return;
+    }
+
+    console.log(
+      `Message reward: +1 PHX for ${message.author.tag}. Balance: ${newBalance}`
+    );
+
+  } catch (error) {
+    console.error("PHX message reward error:", error);
+  } finally {
+    messageRewardLocks.delete(userId);
+  }
+});
+
 // =====================================================
 // DAILY CHECK-IN SYSTEM
 // =====================================================

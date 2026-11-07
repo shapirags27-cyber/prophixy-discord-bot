@@ -100,6 +100,11 @@ async function initDB() {
       user.lastDailyCheckIn = null;
     }
 
+    // Per-user message reward cooldown
+    if (user.lastMessageRewardAt === undefined) {
+      user.lastMessageRewardAt = null;
+    }
+
     if (user.dailyCheckInRewarded === undefined) {
       user.dailyCheckInRewarded = false;
     }
@@ -219,6 +224,7 @@ async function createUser(discordId, username) {
     // Daily check-in system
     dailyCheckIns: 0,
     lastDailyCheckIn: null,
+    lastMessageRewardAt: null,
     dailyCheckInRewarded: false,
 
     sbt: {
