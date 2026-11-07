@@ -5045,7 +5045,7 @@ client.on(Events.MessageCreate, async (message) => {
     // =====================================================
 
     try {
-      await message.react("<:phorva:1568527559552139324>");
+      await message.react("<:phorva:1568711535834964010>");
     } catch (emojiError) {
       console.error(
         "❌ Could not add PHX check-in emoji:",
