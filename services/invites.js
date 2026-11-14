@@ -5,7 +5,8 @@ const {
   updateUser
 } = require("./database");
 
-const { addReward } = require("./phxRewards");
+const { addPHX } = require("./phxRewards");
+const rewards = require("../config/rewards");
 
 // ==============================
 // CACHE SERVER INVITES
@@ -71,98 +72,91 @@ async function recordInvite(
   invitedUserId,
   invitedUsername
 ) {
+  if (!inviterId || !invitedUserId) return null;
 
-  if (!inviterId || !invitedUserId) {
-    return null;
-  }
+  // Prevent self-invites.
+  if (inviterId === invitedUserId) return null;
 
-  // Prevent self-invites
-  if (inviterId === invitedUserId) {
-    return null;
-  }
-
-  let inviter =
-    await getUser(inviterId);
-
+  let inviter = await getUser(inviterId);
   if (!inviter) {
-    inviter =
-      await createUser(
-        inviterId,
-        "Discord User"
-      );
+    inviter = await createUser(inviterId, "Discord User");
   }
 
-  let invitedUser =
-    await getUser(invitedUserId);
-
+  let invitedUser = await getUser(invitedUserId);
   if (!invitedUser) {
-    invitedUser =
-      await createUser(
-        invitedUserId,
-        invitedUsername
-      );
+    invitedUser = await createUser(
+      invitedUserId,
+      invitedUsername
+    );
   }
 
   await db.read();
+  db.data.invites ||= [];
 
-  // Prevent the same Discord member
-  // from generating another invite reward
-  const alreadyRecorded =
-    db.data.invites.some(
-      invite =>
-        invite.invitedUserId ===
-        invitedUserId
-    );
+  // The same Discord member can only count once.
+  const alreadyRecorded = db.data.invites.some(
+    invite => invite.invitedUserId === invitedUserId
+  );
 
   if (alreadyRecorded) {
     console.log(
       `ℹ️ ${invitedUsername} was already recorded as an invite.`
     );
-
     return null;
   }
+
+  // Count only invite rewards, never other PHX earnings.
+  // Older records without rewardAmount are treated as
+  // having received the previous 10 PHX invite reward.
+  const previousInviteRewards = db.data.invites
+    .filter(invite => invite.inviterId === inviterId)
+    .reduce((total, invite) => {
+      const amount = invite.rewardAmount === undefined
+        ? 10
+        : Math.max(0, Number(invite.rewardAmount) || 0);
+
+      return total + amount;
+    }, 0);
+
+  const remainingLifetimeReward = Math.max(
+    0,
+    100 - previousInviteRewards
+  );
+
+  const rewardAmount = Math.min(
+    Math.max(0, Number(rewards.INVITE) || 0),
+    remainingLifetimeReward
+  );
 
   const record = {
     id: Date.now(),
-
     inviterId,
-
     invitedUserId,
-
     invitedUsername,
-
-    createdAt:
-      new Date().toISOString()
+    rewardAmount,
+    createdAt: new Date().toISOString()
   };
 
-  // Save referral record
   db.data.invites.push(record);
 
-  // Update inviter count directly
-  const inviterIndex =
-    db.data.users.findIndex(
-      user =>
-        user.discordId === inviterId
-    );
+  const inviterIndex = db.data.users.findIndex(
+    user => user.discordId === inviterId
+  );
 
-  if (inviterIndex === -1) {
-    return null;
-  }
+  if (inviterIndex === -1) return null;
 
   db.data.users[inviterIndex].invites =
     (db.data.users[inviterIndex].invites || 0) + 1;
 
   await db.write();
 
-  // Award configured invite reward.
-  // Current config: +10 PHX.
-  await addReward(
-    inviterId,
-    "invite"
-  );
+  // A successful referral still counts after the reward cap.
+  if (rewardAmount > 0) {
+    await addPHX(inviterId, rewardAmount);
+  }
 
   console.log(
-    `🎉 Invite recorded: ${inviterId} → ${invitedUserId}`
+    `🎉 Invite recorded: ${inviterId} → ${invitedUserId} (+${rewardAmount} PHX)`
   );
 
   return record;

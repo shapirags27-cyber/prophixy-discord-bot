@@ -45,7 +45,7 @@ Invite your friends to **PhorvaGuard** and earn PHX.
 2. The bot creates your unique invite
 3. Your invite remains valid for **7 days**
 4. When someone joins through your invite, it counts as a successful referral
-5. You earn **+10 PHX** for each successful invite
+5. You earn **+5 PHX** for each successful invite, up to 100 PHX lifetime
 
 🔗 **Your invite is unique to you.**
 ⏳ **Each generated invite expires after 7 days.**`,

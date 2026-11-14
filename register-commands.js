@@ -4,6 +4,8 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
+  ChannelType,
+  PermissionFlagsBits,
 } = require("discord.js");
 
 const commands = [
@@ -224,6 +226,186 @@ const commands = [
   new SlashCommandBuilder()
     .setName("ai-panel")
     .setDescription("Create or update the PhorvaGuard AI Analysis panel"),
+
+
+  // ADMIN ANNOUNCEMENT
+  new SlashCommandBuilder()
+    .setName("announce")
+    .setDescription("Post an announcement in a chosen channel")
+    .addChannelOption(option =>
+      option
+        .setName("channel")
+        .setDescription("Channel where the announcement will be posted")
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName("message")
+        .setDescription("Announcement message")
+        .setMaxLength(1900)
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName("ping")
+        .setDescription("Optional notification role to ping")
+        .addChoices(
+          { name: "X", value: "X" },
+          { name: "Airdrop", value: "Airdrop" },
+          { name: "Event", value: "Event" }
+        )
+        .setRequired(false)
+    ),
+
+  // CITIZEN VERIFICATION PANEL
+  new SlashCommandBuilder()
+    .setName("verification-panel")
+    .setDescription("Post the Citizen member verification panel")
+    .addChannelOption(option =>
+      option
+        .setName("channel")
+        .setDescription("Channel for the verification panel")
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    ),
+
+  // NOTIFICATION ROLE PANEL
+  new SlashCommandBuilder()
+    .setName("notification-panel")
+    .setDescription("Post the X, Airdrop, and Event notification settings")
+    .addChannelOption(option =>
+      option
+        .setName("channel")
+        .setDescription("Channel where the notification panel will be posted")
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    ),
+
+
+  // ROLE MANAGEMENT
+  new SlashCommandBuilder()
+    .setName("create-role")
+    .setDescription("Create a new server role")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(option =>
+      option.setName("name")
+        .setDescription("Name of the new role")
+        .setMaxLength(100)
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("color")
+        .setDescription("Optional hex colour, for example #5865F2")
+        .setRequired(false)
+    )
+    .addBooleanOption(option =>
+      option.setName("display_separately")
+        .setDescription("Display members with this role separately")
+        .setRequired(false)
+    )
+    .addBooleanOption(option =>
+      option.setName("mentionable")
+        .setDescription("Allow members to mention this role")
+        .setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("delete-role")
+    .setDescription("Delete a server role after confirmation")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addRoleOption(option =>
+      option.setName("role")
+        .setDescription("Role to delete")
+        .setRequired(true)
+    ),
+
+  // MEMBER BAN
+  new SlashCommandBuilder()
+    .setName("ban")
+    .setDescription("Ban a member from this server")
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .addUserOption(option =>
+      option.setName("member")
+        .setDescription("Member to ban")
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("reason")
+        .setDescription("Reason for the ban")
+        .setMaxLength(500)
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option.setName("delete_days")
+        .setDescription("Delete recent messages from the last 0 to 7 days")
+        .setMinValue(0)
+        .setMaxValue(7)
+        .setRequired(false)
+    ),
+
+
+
+  // REMOVE MEMBER TIMEOUT
+  new SlashCommandBuilder()
+    .setName("untimeout")
+    .setDescription("Remove a member's active timeout")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(option =>
+      option.setName("member")
+        .setDescription("Member whose timeout should be removed")
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("reason")
+        .setDescription("Reason for removing the timeout")
+        .setMaxLength(500)
+        .setRequired(true)
+    ),
+
+  // MEMBER TIMEOUT
+  new SlashCommandBuilder()
+    .setName("timeout")
+    .setDescription("Temporarily timeout a server member")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(option =>
+      option.setName("member")
+        .setDescription("Member to timeout")
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option.setName("minutes")
+        .setDescription("Timeout duration in minutes (1 to 40320)")
+        .setMinValue(1)
+        .setMaxValue(40320)
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("reason")
+        .setDescription("Reason for the timeout")
+        .setMaxLength(500)
+        .setRequired(true)
+    ),
+
+  // STAFF RAFFLE
+  new SlashCommandBuilder()
+    .setName("raffle")
+    .setDescription("Randomly draw winners from selected members")
+    .addStringOption(option =>
+      option
+        .setName("participants")
+        .setDescription("Mention all participants here")
+        .setMaxLength(4000)
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("winners")
+        .setDescription("Number of winners to draw")
+        .setMinValue(1)
+        .setMaxValue(100)
+        .setRequired(true)
+    ),
 
 ].map(command => command.toJSON());
 

@@ -83,7 +83,7 @@ ${invite.url}
 
 👥 When someone joins through your invite, it will count toward your PhorvaGuard invite total.
 
-⭐ Successful invite reward: **+10 PHX**`,
+⭐ Successful invite reward: **+5 PHX** (100 PHX lifetime cap)`,
         ephemeral: true
       });
 

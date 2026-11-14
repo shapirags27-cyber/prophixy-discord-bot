@@ -10,7 +10,7 @@ module.exports = {
 
   // Other Rewards
   DAILY_CHECKIN: 3,
-  INVITE: 10,
+  INVITE: 5,
 
   // Market Creation
   MARKET_CREATION_FEE: 50,

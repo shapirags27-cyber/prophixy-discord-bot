@@ -1,5 +1,6 @@
 require("dotenv").config();
 const fs = require("fs");
+const { randomInt } = require("crypto");
 
 const {
   Client,
@@ -81,6 +82,60 @@ const {
 // Temporary storage for AI suggestions awaiting creator selection.
 // Nothing is created or charged until the creator confirms the final market.
 const pendingAiMarkets = new Map();
+
+// =====================================================
+// THREE-QUESTION CITIZEN VERIFICATION
+// =====================================================
+const citizenVerificationPassed = new Set();
+
+const citizenQuestions = [
+  {
+    question: "Someone asks you to share your wallet seed phrase to verify your account. What should you do?",
+    answers: [
+      ["A", "Share it with the moderator"],
+      ["B", "Never share it with anyone"],
+      ["C", "Send only half of it"]
+    ],
+    correct: "B"
+  },
+  {
+    question: "Where should you get official PHORVA announcements and links?",
+    answers: [
+      ["A", "Random direct messages"],
+      ["B", "Official PHORVA community channels and verified links"],
+      ["C", "Unverified websites"]
+    ],
+    correct: "B"
+  },
+  {
+    question: "Someone sends you a suspicious link promising free rewards. What should you do?",
+    answers: [
+      ["A", "Connect your wallet immediately"],
+      ["B", "Share the link with everyone"],
+      ["C", "Avoid the link and report it to moderators"]
+    ],
+    correct: "C"
+  }
+];
+
+function buildCitizenQuestion(questionNumber) {
+  const item = citizenQuestions[questionNumber - 1];
+
+  const buttons = item.answers.map(([letter, answer]) =>
+    new ButtonBuilder()
+      .setCustomId(`phx_verify_q${questionNumber}_${letter}`)
+      .setLabel(`${letter}. ${answer}`)
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return {
+    content:
+      `🛡️ **Citizen Verification — Question ${questionNumber} of 3**\n\n` +
+      item.question,
+    components: [new ActionRowBuilder().addComponents(...buttons)]
+  };
+}
+
 
 const client = new Client({
   intents: [
@@ -327,7 +382,9 @@ client.on(Events.GuildMemberAdd, async (member) => {
       await inviteChannel.send(
         `🎉 **New PhorvaGuard Invite!**\n\n` +
         `👤 **${member.user.username}** was invited by <@${inviterId}>.\n` +
-        `🎁 <@${inviterId}> earned **+10 PHX**.\n`+
+        (record.rewardAmount > 0
+          ? `🎁 <@${inviterId}> earned **+${record.rewardAmount} PHX**.\n`
+          : `🎁 <@${inviterId}> has reached the **100 PHX lifetime invite reward cap**.\n`) +
         `👥 Their invite count has increased by **1**.`
       );
 
@@ -365,6 +422,161 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // =====================================================
 
     if (interaction.isButton()) {
+    // ROLE DELETION CONFIRMATION
+    const roleDeleteMatch = interaction.customId.match(
+      /^phx_role_delete_(confirm|cancel)_(\d{17,20})_(\d{17,20})$/
+    );
+
+    if (roleDeleteMatch) {
+      const [, action, roleId, requesterId] = roleDeleteMatch;
+
+      if (interaction.user.id !== requesterId) {
+        return interaction.reply({
+          content: "❌ Only the administrator who requested this deletion can confirm it.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({
+          content: "❌ Only server administrators can delete roles.",
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      if (action === "cancel") {
+        return interaction.update({
+          content: "Deletion cancelled. The role was not changed.",
+          components: []
+        });
+      }
+
+      try {
+        const guild = interaction.guild;
+        if (!guild) {
+          return interaction.update({
+            content: "❌ This action must be used inside the server.",
+            components: []
+          });
+        }
+
+        const role = await guild.roles.fetch(roleId);
+        if (!role || role.id === guild.id || role.managed) {
+          return interaction.update({
+            content: "❌ This role cannot be deleted or no longer exists.",
+            components: []
+          });
+        }
+
+        const botMember = guild.members.me || await guild.members.fetchMe();
+
+        if (
+          !botMember.permissions.has(PermissionFlagsBits.ManageRoles) ||
+          role.position >= botMember.roles.highest.position
+        ) {
+          return interaction.update({
+            content: "❌ I cannot delete this role. Check my Manage Roles permission and role hierarchy.",
+            components: []
+          });
+        }
+
+        await role.delete(`Role deletion confirmed by ${interaction.user.tag}`);
+
+        return interaction.update({
+          content: `✅ The **${role.name}** role has been deleted.`,
+          components: []
+        });
+      } catch (error) {
+        console.error("Role deletion error:", error);
+        return interaction.update({
+          content: "❌ I couldn't delete that role. Check my permissions and try again.",
+          components: []
+        });
+      }
+    }
+
+
+      // =====================================================
+      // PHORVA NOTIFICATION ROLE TOGGLES
+      // =====================================================
+      const notificationRoles = {
+        phx_notify_X: "X",
+        phx_notify_Airdrop: "Airdrop",
+        phx_notify_Event: "Event"
+      };
+
+      const notificationRoleName =
+        notificationRoles[interaction.customId];
+
+      if (notificationRoleName) {
+        try {
+          if (!interaction.guild) {
+            return interaction.reply({
+              content: "❌ This panel only works inside the server.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const role = interaction.guild.roles.cache.find(
+            item => item.name === notificationRoleName
+          );
+
+          if (!role) {
+            return interaction.reply({
+              content: `❌ The **${notificationRoleName}** role is missing. Please contact an administrator.`,
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const botMember =
+            interaction.guild.members.me ||
+            await interaction.guild.members.fetchMe();
+
+          if (
+            !botMember.permissions.has(PermissionFlagsBits.ManageRoles) ||
+            role.position >= botMember.roles.highest.position ||
+            role.managed
+          ) {
+            return interaction.reply({
+              content: `❌ I cannot manage the **${notificationRoleName}** role. An administrator must check my Manage Roles permission and role hierarchy.`,
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const member = await interaction.guild.members.fetch(
+            interaction.user.id
+          );
+
+          if (member.roles.cache.has(role.id)) {
+            await member.roles.remove(
+              role,
+              `Member opted out of ${notificationRoleName} notifications`
+            );
+
+            return interaction.reply({
+              content: `🔕 You have turned **${notificationRoleName}** notifications off.`,
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          await member.roles.add(
+            role,
+            `Member opted into ${notificationRoleName} notifications`
+          );
+
+          return interaction.reply({
+            content: `🔔 You have turned **${notificationRoleName}** notifications on.`,
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Notification role toggle error:", error);
+
+          return interaction.reply({
+            content: "❌ I couldn't update your notification role. Please contact an administrator.",
+            flags: MessageFlags.Ephemeral
+          }).catch(() => {});
+        }
+      }
 
       // =====================================================
       // AI ANALYSIS BUTTON
@@ -613,7 +825,7 @@ ${user.sbt?.role || "Not Verified"}`
               .setDescription(lines.join("\n"))
               .setFooter({
                 text:
-                  "Earn +10 PHX for every successful unique invite."
+                  "Earn +5 PHX for every successful unique invite."
               })
               .setTimestamp();
 
@@ -737,6 +949,169 @@ ${user.sbt?.role || "Not Verified"}`
 
 
       // =====================================================
+      // =====================================================
+      // THREE-QUESTION CITIZEN VERIFICATION
+      // =====================================================
+
+      if (interaction.customId === "verification_continue") {
+        try {
+          if (!interaction.guild) {
+            return interaction.reply({
+              content: "This verification only works inside the server.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const citizenRole = interaction.guild.roles.cache.find(
+            role => role.name === "Citizen"
+          );
+
+          if (!citizenRole) {
+            return interaction.reply({
+              content: 'The "Citizen" role was not found. Please contact an administrator.',
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const member = await interaction.guild.members.fetch(interaction.user.id);
+
+          if (member.roles.cache.has(citizenRole.id)) {
+            return interaction.reply({
+              content: "✅ You already have the Citizen role.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          return interaction.reply({
+            ...buildCitizenQuestion(1),
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Citizen verification start error:", error);
+          if (!interaction.replied && !interaction.deferred) {
+            return interaction.reply({
+              content: "❌ Could not start verification. Please try again.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+        }
+        return;
+      }
+
+      const quizAnswer = interaction.customId.match(/^phx_verify_q([1-3])_([ABC])$/);
+
+      if (quizAnswer) {
+        const questionNumber = Number(quizAnswer[1]);
+        const selectedAnswer = quizAnswer[2];
+        const question = citizenQuestions[questionNumber - 1];
+
+        if (selectedAnswer !== question.correct) {
+          return interaction.update({
+            content:
+              "❌ **That answer is incorrect. Please try again.**\n\n" +
+              buildCitizenQuestion(questionNumber).content,
+            components: buildCitizenQuestion(questionNumber).components
+          });
+        }
+
+        if (questionNumber < 3) {
+          return interaction.update(buildCitizenQuestion(questionNumber + 1));
+        }
+
+        citizenVerificationPassed.add(`${interaction.guildId}:${interaction.user.id}`);
+
+        const claimRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("claim_citizen_role")
+            .setLabel("Claim Citizen Role")
+            .setEmoji("✅")
+            .setStyle(ButtonStyle.Success)
+        );
+
+        return interaction.update({
+          content:
+            "✅ **All three answers are correct!**\n\n" +
+            "You can now claim your **Citizen** role.",
+          components: [claimRow]
+        });
+      }
+
+      if (interaction.customId === "claim_citizen_role") {
+        const verificationKey = `${interaction.guildId}:${interaction.user.id}`;
+
+        if (!citizenVerificationPassed.has(verificationKey)) {
+          return interaction.reply({
+            content: "❌ Complete all three verification questions correctly before claiming the Citizen role.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        try {
+          if (!interaction.guild) {
+            return interaction.reply({
+              content: "This button only works inside the server.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const citizenRole = interaction.guild.roles.cache.find(
+            role => role.name === "Citizen"
+          );
+
+          if (!citizenRole) {
+            return interaction.update({
+              content: 'The "Citizen" role was not found. Please contact an administrator.',
+              components: []
+            });
+          }
+
+          const botMember =
+            interaction.guild.members.me ||
+            await interaction.guild.members.fetchMe();
+
+          if (
+            !botMember.permissions.has(PermissionFlagsBits.ManageRoles) ||
+            citizenRole.managed ||
+            citizenRole.position >= botMember.roles.highest.position
+          ) {
+            return interaction.update({
+              content: "❌ The bot cannot assign the Citizen role. An administrator must check its Manage Roles permission and role position.",
+              components: []
+            });
+          }
+
+          const member = await interaction.guild.members.fetch(interaction.user.id);
+
+          if (!member.roles.cache.has(citizenRole.id)) {
+            await member.roles.add(
+              citizenRole,
+              "Member passed all three Citizen verification questions"
+            );
+          }
+
+          citizenVerificationPassed.delete(verificationKey);
+
+          return interaction.update({
+            content: "✅ **Verification successful!** You now have the Citizen role.",
+            components: []
+          });
+        } catch (error) {
+          console.error("Citizen role verification error:", error);
+
+          if (!interaction.replied && !interaction.deferred) {
+            return interaction.reply({
+              content: "❌ Verification failed. Please contact an administrator.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          return interaction.followUp({
+            content: "❌ Verification failed. Please contact an administrator.",
+            flags: MessageFlags.Ephemeral
+          }).catch(() => {});
+        }
+      }
+
       // OPEN SUPPORT TICKET
       // =====================================================
 
@@ -2576,6 +2951,676 @@ ${user.sbt?.role || "Not Verified"}`
       // ADMIN AI ANALYSIS PANEL
       // =====================================================
 
+      // =====================================================
+      // ADMIN-ONLY ANNOUNCEMENT
+      // =====================================================
+
+      if (interaction.commandName === "announce") {
+        if (!interaction.memberPermissions?.has(
+          PermissionFlagsBits.Administrator
+        )) {
+          return interaction.reply({
+            content: "❌ Only server administrators can use this command.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const channel = interaction.options.getChannel("channel");
+        const message = interaction.options.getString("message");
+        const pingRoleName = interaction.options.getString("ping");
+
+        if (!interaction.guild || !channel || !channel.isTextBased()) {
+          return interaction.reply({
+            content: "❌ Choose a valid text channel.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        try {
+          let content = message;
+          const allowedRoleIds = [];
+
+          if (pingRoleName) {
+            const pingRole = interaction.guild.roles.cache.find(
+              role => role.name === pingRoleName
+            );
+
+            if (!pingRole) {
+              return interaction.reply({
+                content: `❌ The **${pingRoleName}** role does not exist. Create that role first.`,
+                flags: MessageFlags.Ephemeral
+              });
+            }
+
+            const botMember =
+              interaction.guild.members.me ||
+              await interaction.guild.members.fetchMe();
+
+            const canMentionRole =
+              pingRole.mentionable ||
+              botMember.permissions.has(PermissionFlagsBits.MentionEveryone);
+
+            if (!canMentionRole) {
+              return interaction.reply({
+                content:
+                  `❌ I found the **${pingRoleName}** role, but I cannot mention it. ` +
+                  "Give the bot the **Mention @everyone, @here, and All Roles** permission " +
+                  "in the announcement channel, or make this role mentionable.",
+                flags: MessageFlags.Ephemeral
+              });
+            }
+
+            content = `<@&${pingRole.id}>\n${message}`;
+            allowedRoleIds.push(pingRole.id);
+          }
+
+          await channel.send({
+            content,
+            allowedMentions: {
+              parse: [],
+              roles: allowedRoleIds
+            }
+          });
+
+          return interaction.reply({
+            content: pingRoleName
+              ? `✅ Announcement posted in ${channel} with a real **${pingRoleName}** role mention.`
+              : `✅ Announcement posted in ${channel}.`,
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Announcement error:", error);
+          return interaction.reply({
+            content: "❌ I couldn't post there. Check the bot's channel permissions.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      }
+
+      // =====================================================
+      // CITIZEN VERIFICATION PANEL
+      // =====================================================
+
+      if (interaction.commandName === "verification-panel") {
+        if (!isSeniorGuardianOrAdmin(interaction.member)) {
+          return interaction.reply({
+            content: "❌ You don't have permission to create this panel.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const channel = interaction.options.getChannel("channel");
+
+        if (!interaction.guild || !channel || !channel.isTextBased()) {
+          return interaction.reply({
+            content: "❌ Choose a valid text channel.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const citizenRole = interaction.guild.roles.cache.find(
+          role => role.name === "Citizen"
+        );
+
+        if (!citizenRole) {
+          return interaction.reply({
+            content: '❌ Create the "Citizen" role first, then run this command again.',
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("verification_continue")
+            .setLabel("Continue")
+            .setEmoji("✅")
+            .setStyle(ButtonStyle.Success)
+        );
+
+        try {
+          await channel.send({
+            content:
+              "# 🛡️ PHORVAGUARD MEMBER VERIFICATION\n\n" +
+              "Welcome to the community!\n\n" +
+              "Click Continue, answer all three security questions correctly, then claim your **Citizen** role.",
+            components: [row]
+          });
+
+          return interaction.reply({
+            content: `✅ Verification panel posted in ${channel}.`,
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Verification panel error:", error);
+          return interaction.reply({
+            content: "❌ Could not post the verification panel. Check channel permissions.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      }
+
+      // =====================================================
+      // STAFF RAFFLE
+      // =====================================================
+
+      // =====================================================
+      // NOTIFICATION ROLE PANEL
+      // =====================================================
+      if (interaction.commandName === "notification-panel") {
+        if (!isSeniorGuardianOrAdmin(interaction.member)) {
+          return interaction.reply({
+            content: "❌ You don't have permission to create this panel.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const channel = interaction.options.getChannel("channel");
+
+        if (!interaction.guild || !channel || !channel.isTextBased()) {
+          return interaction.reply({
+            content: "❌ Choose a valid text channel.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const requiredRoles = ["X", "Airdrop", "Event"];
+        const missingRoles = requiredRoles.filter(
+          name => !interaction.guild.roles.cache.some(role => role.name === name)
+        );
+
+        if (missingRoles.length) {
+          return interaction.reply({
+            content: `❌ Create these server roles first: **${missingRoles.join(", ")}**`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("phx_notify_X")
+            .setLabel("X Updates")
+            .setEmoji("𝕏")
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId("phx_notify_Airdrop")
+            .setLabel("Airdrops")
+            .setEmoji("🎁")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId("phx_notify_Event")
+            .setLabel("Events")
+            .setEmoji("📅")
+            .setStyle(ButtonStyle.Secondary)
+        );
+
+        try {
+          await channel.send({
+            content:
+              "# 🔔 PHORVA NOTIFICATION SETTINGS\n\n" +
+              "Choose the updates you want to receive. You can subscribe to each category independently. " +
+              "Click a button again to turn that notification off.\n\n" +
+              "• **X Updates** — community and X announcements\n" +
+              "• **Airdrops** — airdrop announcements\n" +
+              "• **Events** — community events and activities",
+            components: [row]
+          });
+
+          return interaction.reply({
+            content: `✅ Notification panel posted in ${channel}.`,
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Notification panel error:", error);
+
+          return interaction.reply({
+            content: "❌ Could not post the notification panel. Check channel permissions.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      }
+
+      // =====================================================
+      // STAFF RAFFLE
+      // =====================================================
+      
+      // CREATE ROLE
+      if (interaction.commandName === "create-role") {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({
+            content: "❌ Only server administrators can create roles.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const guild = interaction.guild;
+        if (!guild) {
+          return interaction.reply({
+            content: "❌ This command only works inside a server.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const name = interaction.options.getString("name");
+        const colorInput = interaction.options.getString("color");
+        const hoist = interaction.options.getBoolean("display_separately") ?? false;
+        const mentionable = interaction.options.getBoolean("mentionable") ?? false;
+
+        let color;
+        if (colorInput) {
+          if (!/^#?[0-9a-fA-F]{6}$/.test(colorInput)) {
+            return interaction.reply({
+              content: "❌ Enter a valid six-digit hex colour, such as #5865F2.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+          color = parseInt(colorInput.replace("#", ""), 16);
+        }
+
+        try {
+          const botMember = guild.members.me || await guild.members.fetchMe();
+
+          if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            return interaction.reply({
+              content: "❌ I need the Manage Roles permission to create roles.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const options = {
+            name,
+            hoist,
+            mentionable,
+            reason: `Role created by ${interaction.user.tag}`
+          };
+          if (color !== undefined) options.color = color;
+
+          const role = await guild.roles.create(options);
+
+          return interaction.reply({
+            content: `✅ Created role **${role.name}**.\nColour: ${colorInput || "Default"}\nDisplayed separately: ${hoist ? "Yes" : "No"}\nMentionable: ${mentionable ? "Yes" : "No"}`,
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Create role error:", error);
+          return interaction.reply({
+            content: "❌ I couldn't create that role. Check my Manage Roles permission and role hierarchy.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      }
+
+      // REQUEST ROLE DELETION
+      if (interaction.commandName === "delete-role") {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          return interaction.reply({
+            content: "❌ Only server administrators can delete roles.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const guild = interaction.guild;
+        const role = interaction.options.getRole("role");
+
+        if (!guild || !role || role.id === guild.id || role.managed) {
+          return interaction.reply({
+            content: "❌ That role cannot be deleted.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        try {
+          const botMember = guild.members.me || await guild.members.fetchMe();
+
+          if (
+            !botMember.permissions.has(PermissionFlagsBits.ManageRoles) ||
+            role.position >= botMember.roles.highest.position
+          ) {
+            return interaction.reply({
+              content: "❌ I cannot manage that role. Check my Manage Roles permission and role hierarchy.",
+              flags: MessageFlags.Ephemeral
+            });
+          }
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`phx_role_delete_confirm_${role.id}_${interaction.user.id}`)
+              .setLabel("Confirm deletion")
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+              .setCustomId(`phx_role_delete_cancel_${role.id}_${interaction.user.id}`)
+              .setLabel("Cancel")
+              .setStyle(ButtonStyle.Secondary)
+          );
+
+          return interaction.reply({
+            content: `⚠️ Are you sure you want to permanently delete **${role.name}**? This cannot be undone.`,
+            components: [row],
+            flags: MessageFlags.Ephemeral
+          });
+        } catch (error) {
+          console.error("Delete role request error:", error);
+          return interaction.reply({
+            content: "❌ I couldn't prepare the role deletion.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+      }
+
+      // BAN MEMBER
+      
+      // MEMBER TIMEOUT
+
+      // REMOVE MEMBER TIMEOUT
+      if (interaction.commandName === "untimeout") {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+          return interaction.reply({
+            content: "❌ You need the Moderate Members permission to use this command.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const guild = interaction.guild;
+        const targetUser = interaction.options.getUser("member");
+        const reason = interaction.options.getString("reason");
+
+        if (!guild) {
+          return interaction.reply({
+            content: "❌ This command only works inside a server.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        try {
+          const botMember = guild.members.me || await guild.members.fetchMe();
+          const executorMember = await guild.members.fetch(interaction.user.id);
+          const targetMember = await guild.members.fetch(targetUser.id);
+
+          if (!botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+            return interaction.editReply("❌ I need the Moderate Members permission.");
+          }
+
+          if (
+            targetMember.roles.highest.comparePositionTo(botMember.roles.highest) >= 0
+          ) {
+            return interaction.editReply("❌ I cannot manage this member because their highest role is equal to or above my highest role.");
+          }
+
+          if (
+            targetMember.roles.highest.comparePositionTo(executorMember.roles.highest) >= 0
+          ) {
+            return interaction.editReply("❌ You cannot manage a member whose highest role is equal to or above yours.");
+          }
+
+          if (!targetMember.communicationDisabledUntilTimestamp) {
+            return interaction.editReply("ℹ️ This member does not currently have an active timeout.");
+          }
+
+          if (!targetMember.moderatable) {
+            return interaction.editReply("❌ Discord does not allow me to remove this member's timeout. Check my permissions and role hierarchy.");
+          }
+
+          await targetMember.timeout(
+            null,
+            `${reason} | Timeout removed by ${interaction.user.tag}`
+          );
+
+          return interaction.editReply(
+            `✅ The timeout has been removed from **${targetUser.tag}**.
+Reason: ${reason}`
+          );
+        } catch (error) {
+          console.error("Untimeout command error:", error);
+          return interaction.editReply(
+            "❌ I couldn't remove that timeout. Check permissions and role hierarchy."
+          );
+        }
+      }
+
+      if (interaction.commandName === "timeout") {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+          return interaction.reply({
+            content: "❌ You need the Moderate Members permission to use this command.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const guild = interaction.guild;
+        const targetUser = interaction.options.getUser("member");
+        const minutes = interaction.options.getInteger("minutes");
+        const reason = interaction.options.getString("reason");
+
+        if (!guild) {
+          return interaction.reply({
+            content: "❌ This command only works inside a server.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        try {
+          const botMember = guild.members.me || await guild.members.fetchMe();
+          const executorMember = await guild.members.fetch(interaction.user.id);
+          const targetMember = await guild.members.fetch(targetUser.id);
+
+          if (!botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+            return interaction.editReply("❌ I need the Moderate Members permission.");
+          }
+
+          if (targetUser.id === interaction.user.id) {
+            return interaction.editReply("❌ You cannot timeout yourself.");
+          }
+
+          if (targetUser.id === guild.ownerId) {
+            return interaction.editReply("❌ The server owner cannot be timed out.");
+          }
+
+          if (targetMember.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.editReply("❌ Members with Administrator permission cannot be timed out.");
+          }
+
+          if (
+            targetMember.roles.highest.comparePositionTo(botMember.roles.highest) >= 0
+          ) {
+            return interaction.editReply("❌ I cannot timeout this member because their highest role is equal to or above my highest role.");
+          }
+
+          if (
+            targetMember.roles.highest.comparePositionTo(executorMember.roles.highest) >= 0
+          ) {
+            return interaction.editReply("❌ You cannot timeout a member whose highest role is equal to or above yours.");
+          }
+
+          if (!targetMember.moderatable) {
+            return interaction.editReply("❌ Discord does not allow me to timeout this member. Check my permissions and the role hierarchy.");
+          }
+
+          await targetMember.timeout(
+            minutes * 60 * 1000,
+            `${reason} | Timed out by ${interaction.user.tag}`
+          );
+
+          return interaction.editReply(
+            `⏳ **${targetUser.tag}** has been timed out.
+Duration: **${minutes} minute(s)**
+Reason: ${reason}`
+          );
+        } catch (error) {
+          console.error("Timeout command error:", error);
+          return interaction.editReply(
+            "❌ I couldn't timeout that member. Check permissions, role hierarchy, and whether the member is still in the server."
+          );
+        }
+      }
+
+if (interaction.commandName === "ban") {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
+          return interaction.reply({
+            content: "❌ You need the Ban Members permission to use this command.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const guild = interaction.guild;
+        const targetUser = interaction.options.getUser("member");
+        const reason = interaction.options.getString("reason");
+        const deleteDays = interaction.options.getInteger("delete_days") ?? 0;
+
+        if (!guild) {
+          return interaction.reply({
+            content: "❌ This command only works inside a server.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        try {
+          const botMember = guild.members.me || await guild.members.fetchMe();
+
+          if (!botMember.permissions.has(PermissionFlagsBits.BanMembers)) {
+            return interaction.editReply("❌ I need the Ban Members permission.");
+          }
+
+          if (targetUser.id === guild.ownerId) {
+            return interaction.editReply("❌ The server owner cannot be banned.");
+          }
+
+          const targetMember = await guild.members.fetch(targetUser.id);
+          const executorMember = await guild.members.fetch(interaction.user.id);
+
+          if (
+            targetMember.roles.highest.position >= botMember.roles.highest.position
+          ) {
+            return interaction.editReply("❌ I cannot ban this member because their highest role is equal to or above my highest role.");
+          }
+
+          if (
+            targetMember.roles.highest.position >= executorMember.roles.highest.position
+          ) {
+            return interaction.editReply("❌ You cannot ban a member whose highest role is equal to or above yours.");
+          }
+
+          await guild.members.ban(targetUser.id, {
+            reason: `${reason} | Banned by ${interaction.user.tag}`,
+            deleteMessageSeconds: deleteDays * 86400
+          });
+
+          return interaction.editReply(
+            `🔨 **${targetUser.tag}** has been banned.\nReason: ${reason}\nRecent message history deleted: ${deleteDays} day(s).`
+          );
+        } catch (error) {
+          console.error("Ban command error:", error);
+          return interaction.editReply(
+            "❌ I couldn't ban that member. They may not be in the server, or Discord permissions may be blocking the action."
+          );
+        }
+      }
+
+if (interaction.commandName === "raffle") {
+        if (!isSeniorGuardianOrAdmin(interaction.member)) {
+          return interaction.reply({
+            content: "❌ You don't have permission to run a raffle.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const guild = interaction.guild;
+        const participantText =
+          interaction.options.getString("participants");
+        const winnerCount =
+          interaction.options.getInteger("winners");
+
+        if (!guild) {
+          return interaction.reply({
+            content: "❌ This command only works inside a server.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        const mentionIds = [
+          ...participantText.matchAll(/<@!?(\d+)>/g)
+        ].map(match => match[1]);
+
+        const plainIds =
+          participantText.match(/\b\d{17,20}\b/g) || [];
+
+        const participantIds = [
+          ...new Set([...mentionIds, ...plainIds])
+        ];
+
+        if (!participantIds.length) {
+          return interaction.reply({
+            content: "❌ Add participants by mentioning them in the participants field.",
+            flags: MessageFlags.Ephemeral
+          });
+        }
+
+        await interaction.deferReply();
+
+        try {
+          const fetchedMembers = await Promise.all(
+            participantIds.map(async id => {
+              try {
+                return await guild.members.fetch(id);
+              } catch {
+                return null;
+              }
+            })
+          );
+
+          const members = fetchedMembers.filter(
+            member => member && !member.user.bot
+          );
+
+          if (!members.length) {
+            return interaction.editReply(
+              "❌ No valid human participants were found."
+            );
+          }
+
+          if (winnerCount > members.length) {
+            return interaction.editReply(
+              `❌ You requested ${winnerCount} winners, but only ${members.length} valid participants were found.`
+            );
+          }
+
+          // Fisher-Yates shuffle using secure random integers.
+          const shuffled = [...members];
+
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = randomInt(i + 1);
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+
+          const winners = shuffled.slice(0, winnerCount);
+          const winnerMentions = winners.map(
+            member => `<@${member.id}>`
+          );
+
+          return interaction.editReply({
+            content:
+              `🎉 **PHORVAGUARD RAFFLE RESULTS**\n\n` +
+              `👥 Participants: **${members.length}**\n` +
+              `🏆 Winners: **${winnerCount}**\n\n` +
+              winnerMentions.map((mention, index) =>
+                `**${index + 1}.** ${mention}`
+              ).join("\n"),
+            allowedMentions: {
+              users: winners.map(member => member.id)
+            }
+          });
+
+        } catch (error) {
+          console.error("Raffle error:", error);
+          return interaction.editReply(
+            "❌ The raffle could not be completed."
+          );
+        }
+      }
+
       if (
         interaction.commandName === "ai-panel"
       ) {
@@ -2951,7 +3996,7 @@ ${user.sbt?.role || "Not Verified"}`
           .setDescription(
             "Invite people to join the PhorvaGuard community.\n\n" +
             "Generate your personal invite link using the button below.\n\n" +
-            "Your existing invite rewards and tracking rules remain unchanged."
+            "Successful unique invites earn 5 PHX each, up to 100 PHX in lifetime invite rewards."
           )
           .setFooter({
             text: "PhorvaGuard • Invite and grow the community"
@@ -4541,7 +5586,7 @@ Your unique invite is ready:
 
 ⏳ **Expires:** 7 days from now
 
-👥 **Reward:** +10 PHX for each successful invite
+👥 **Reward:** +5 PHX for each successful invite
 
 🎁 Share this link with your friends!
 
