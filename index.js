@@ -3139,7 +3139,7 @@ ${user.sbt?.role || "Not Verified"}`
           new ButtonBuilder()
             .setCustomId("phx_notify_X")
             .setLabel("X Updates")
-            .setEmoji("𝕏")
+            .setEmoji("🔔")
             .setStyle(ButtonStyle.Primary),
           new ButtonBuilder()
             .setCustomId("phx_notify_Airdrop")
